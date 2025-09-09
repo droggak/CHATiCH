@@ -1,19 +1,100 @@
-﻿<Window x:Class="PandionClone.ChatWindow"
+﻿<Window x:Class="CHATiCH.ChatWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="XMPP Chat" Height="400" Width="600">
+        xmlns:local="clr-namespace:CHATiCH"
+        Title="Чат" Height="600" Width="900">
+    <Window.Resources>
+        <local:StatusToBrushConverter x:Key="StatusToBrushConverter" />
+    </Window.Resources>
     <Grid>
         <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="200"/>
+            <ColumnDefinition Width="220"/>
             <ColumnDefinition Width="*"/>
         </Grid.ColumnDefinitions>
 
-        <ListBox x:Name="UsersListBox" Grid.Column="0" SelectionChanged="UsersListBox_SelectionChanged" />
+        <!-- Левая колонка: выбор статуса + контакты -->
+        <DockPanel Grid.Column="0" Margin="5">
+            <!-- Панель выбора статуса -->
+            <StackPanel DockPanel.Dock="Top" Margin="0,0,0,10">
+                <ComboBox x:Name="StatusComboBox" SelectionChanged="StatusComboBox_SelectionChanged" SelectedIndex="0">
+                    <ComboBoxItem Content="Онлайн" Tag="Online"/>
+                    <ComboBoxItem Content="Отошел" Tag="Away"/>
+                </ComboBox>
+                <TextBox x:Name="StatusMessageBox"
+                         Margin="0,5,0,0"
+                         Text="Online via WPF"
+                         LostFocus="StatusMessageBox_LostFocus"/>
+            </StackPanel>
 
-        <StackPanel Grid.Column="1">
-            <TextBox x:Name="ChatHistory" Height="250" TextWrapping="Wrap" IsReadOnly="True" VerticalScrollBarVisibility="Auto" />
-            <TextBox x:Name="InputBox" Height="30" />
-            <Button Content="Send" Click="BtnSend_Click" />
-        </StackPanel>
+            <!-- Список контактов -->
+            <ListBox x:Name="ContactsList"
+                     ItemsSource="{Binding Contacts}"
+                     MouseDoubleClick="ContactsList_MouseDoubleClick">
+                <ListBox.ItemTemplate>
+                    <DataTemplate>
+                        <StackPanel Orientation="Horizontal">
+                            <Ellipse Width="10" Height="10" Margin="0,0,5,0"
+                                     Fill="{Binding Availability, Converter={StaticResource StatusToBrushConverter}}"/>
+                            <TextBlock Text="{Binding Name}"/>
+                            <TextBlock Text=" (" Margin="5,0,0,0"/>
+                            <TextBlock Text="{Binding StatusText}" Foreground="Gray"/>
+                            <TextBlock Text=")" />
+                        </StackPanel>
+                    </DataTemplate>
+                </ListBox.ItemTemplate>
+            </ListBox>
+        </DockPanel>
+
+        <!-- Правая колонка: чаты -->
+        <Grid Grid.Column="1" Margin="5">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="*"/>
+                <RowDefinition Height="Auto"/>
+            </Grid.RowDefinitions>
+
+            <TabControl x:Name="ChatTabs" Grid.Row="0">
+                <TabControl.ItemTemplate>
+                    <DataTemplate>
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="{Binding Header}" Margin="0,0,5,0"/>
+                            <Button Content="x"
+                                    Command="{Binding DataContext.CloseTabCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                    CommandParameter="{Binding}"
+                                    Padding="0"
+                                    Width="16" Height="16"
+                                    Margin="5,0,0,0"/>
+                        </StackPanel>
+                    </DataTemplate>
+                </TabControl.ItemTemplate>
+                <TabControl.ContentTemplate>
+                    <DataTemplate>
+                        <ScrollViewer VerticalScrollBarVisibility="Auto">
+                            <ListBox ItemsSource="{Binding Content}"
+                                     Margin="5"
+                                     BorderThickness="0"
+                                     Background="White"
+                                     x:Name="MessagesList">
+                                <ListBox.ItemTemplate>
+                                    <DataTemplate>
+                                        <TextBlock Text="{Binding}"/>
+                                    </DataTemplate>
+                                </ListBox.ItemTemplate>
+                                <ListBox.Resources>
+                                    <Style TargetType="ListBox">
+                                        <EventSetter Event="Loaded" Handler="MessagesList_Loaded"/>
+                                    </Style>
+                                </ListBox.Resources>
+                            </ListBox>
+                        </ScrollViewer>
+                    </DataTemplate>
+                </TabControl.ContentTemplate>
+            </TabControl>
+
+            <!-- Поле ввода -->
+            <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="5">
+                <TextBox x:Name="MessageTextBox" Width="400" Margin="0,0,5,0" KeyDown="MessageTextBox_KeyDown"/>
+                <Button Content="Отправить" Click="SendMessage_Click" Width="100"/>
+            </StackPanel>
+        </Grid>
     </Grid>
 </Window>

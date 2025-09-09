@@ -1,14 +1,17 @@
-﻿<Window x:Class="PandionClone.LoginForm"
+﻿<Window x:Class="CHATiCH.LoginForm"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="XMPP Login" Height="250" Width="300">
-    <Grid Margin="20">
-        <StackPanel>
-            <TextBlock Text="Username" />
+        Title="Login" Height="200" Width="300">
+    <Grid>
+        <StackPanel Margin="10">
+            <TextBlock Text="Username:" />
             <TextBox x:Name="txtUsername" />
-            <PasswordBox x:Name="txtPassword" Margin="0,0,0,10"/>
-            <TextBox x:Name="txtDomain" Text="win-m4f2mfrj6i4.vkr.loc" Margin="0,0,0,10"/>
-            <Button Content="Login" Click="BtnLogin_Click" />
+            <TextBlock Text="Password:" />
+            <PasswordBox x:Name="txtPassword" />
+            <TextBlock Text="Domain:" />
+            <TextBox x:Name="txtDomain" Text="win-m4f2mfrj6i4.vkr.loc" />
+            <!-- Значение по умолчанию для теста -->
+            <Button Content="Login" Click="BtnLogin_Click" Margin="0,10,0,0" />
         </StackPanel>
     </Grid>
 </Window>
