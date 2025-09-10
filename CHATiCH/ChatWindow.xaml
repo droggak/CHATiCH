@@ -5,16 +5,17 @@
         Title="Чат" Height="600" Width="900">
     <Window.Resources>
         <local:StatusToBrushConverter x:Key="StatusToBrushConverter" />
+        <local:IncomingToBrushConverter x:Key="IncomingToBrushConverter" />
     </Window.Resources>
+
     <Grid>
         <Grid.ColumnDefinitions>
             <ColumnDefinition Width="220"/>
             <ColumnDefinition Width="*"/>
         </Grid.ColumnDefinitions>
 
-        <!-- Левая колонка: выбор статуса + контакты -->
+        <!-- Левая колонка: статус и контакты -->
         <DockPanel Grid.Column="0" Margin="5">
-            <!-- Панель выбора статуса -->
             <StackPanel DockPanel.Dock="Top" Margin="0,0,0,10">
                 <ComboBox x:Name="StatusComboBox" SelectionChanged="StatusComboBox_SelectionChanged" SelectedIndex="0">
                     <ComboBoxItem Content="Онлайн" Tag="Online"/>
@@ -26,7 +27,6 @@
                          LostFocus="StatusMessageBox_LostFocus"/>
             </StackPanel>
 
-            <!-- Список контактов -->
             <ListBox x:Name="ContactsList"
                      ItemsSource="{Binding Contacts}"
                      MouseDoubleClick="ContactsList_MouseDoubleClick">
@@ -76,7 +76,15 @@
                                      x:Name="MessagesList">
                                 <ListBox.ItemTemplate>
                                     <DataTemplate>
-                                        <TextBlock Text="{Binding}"/>
+                                        <StackPanel Orientation="Vertical" Margin="0,2">
+                                            <TextBlock FontWeight="Bold"
+                                                       Foreground="{Binding IsIncoming, Converter={StaticResource IncomingToBrushConverter}}"
+                                                       Text="{Binding Author}" />
+                                            <TextBlock Text="{Binding Text}" TextWrapping="Wrap"/>
+                                            <TextBlock Text="{Binding Time, StringFormat='{}{0:HH:mm}'}"
+                                                       FontSize="10" Foreground="Gray"
+                                                       HorizontalAlignment="Right"/>
+                                        </StackPanel>
                                     </DataTemplate>
                                 </ListBox.ItemTemplate>
                                 <ListBox.Resources>

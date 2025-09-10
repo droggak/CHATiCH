@@ -6,6 +6,9 @@ using System.Windows.Media;
 
 namespace CHATiCH
 {
+    /// <summary>
+    /// Конвертер: Availability (Online/Away/Offline/DoNotDisturb) → цвет кружка
+    /// </summary>
     public class StatusToBrushConverter : IValueConverter
     {
         public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
@@ -15,18 +18,18 @@ namespace CHATiCH
                 switch (availability)
                 {
                     case Availability.Online:
-                        return new SolidColorBrush(Colors.Green);
+                        return Brushes.Green;
                     case Availability.Away:
-                        return new SolidColorBrush(Colors.Yellow);
+                        return Brushes.Goldenrod;
                     case Availability.DoNotDisturb:
-                        return new SolidColorBrush(Colors.Red);
+                        return Brushes.Red;
                     case Availability.Offline:
-                        return new SolidColorBrush(Colors.Gray);
+                        return Brushes.Gray;
                     default:
-                        return new SolidColorBrush(Colors.Gray);
+                        return Brushes.Gray;
                 }
             }
-            return new SolidColorBrush(Colors.Gray);
+            return Brushes.Gray;
         }
 
         public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)

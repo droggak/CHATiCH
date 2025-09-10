@@ -89,6 +89,7 @@
       <Generator>MSBuild:Compile</Generator>
       <SubType>Designer</SubType>
     </ApplicationDefinition>
+    <Compile Include="IncomingToBrushConverter.cs" />
     <Compile Include="StatusToBrushConverter.cs" />
     <Compile Include="UserContact.cs" />
     <Page Include="ChatWindow.xaml">

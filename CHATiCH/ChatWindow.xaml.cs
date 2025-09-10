@@ -10,6 +10,9 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Threading;
+using System.Globalization;
+using System.Windows.Data;
+using System.Windows.Media;
 
 namespace CHATiCH
 {
@@ -41,15 +44,12 @@ namespace CHATiCH
 
             LoadRoster();
 
-            // Подписка на события XMPP
             _client.StatusChanged += OnStatusChanged;
             _client.Message += OnMessageReceived;
             _client.RosterUpdated += OnRosterUpdated;
 
-            // Инициализация активности
             _lastActivityTime = DateTime.Now;
 
-            // Таймер каждые 10 сек
             _statusTimer = new DispatcherTimer();
             _statusTimer.Interval = TimeSpan.FromSeconds(10);
             _statusTimer.Tick += StatusTimer_Tick;
@@ -77,7 +77,7 @@ namespace CHATiCH
             }
         }
 
-        // --- Работа с историей ---
+        // === История ===
         private string GetHistoryFile(string jid)
         {
             string today = DateTime.Now.ToString("yyyy-MM-dd");
@@ -121,6 +121,7 @@ namespace CHATiCH
             }
         }
 
+        // === Активность пользователя ===
         private void OnActivity(object sender, PreProcessInputEventArgs e)
         {
             _lastActivityTime = DateTime.Now;
@@ -210,6 +211,7 @@ namespace CHATiCH
             }
         }
 
+        // === Работа с ростером ===
         private void LoadRoster()
         {
             try
@@ -264,6 +266,7 @@ namespace CHATiCH
             Dispatcher.Invoke(LoadRoster);
         }
 
+        // === Сообщения ===
         private void OnMessageReceived(object sender, MessageEventArgs e)
         {
             Dispatcher.Invoke(() =>
@@ -404,6 +407,7 @@ namespace CHATiCH
         }
     }
 
+    // === Модели и конвертеры ===
     public class ChatMessage
     {
         public string Author { get; set; }
@@ -425,6 +429,8 @@ namespace CHATiCH
         public string Jid { get; set; }
     }
 
+    
+
     public class RelayCommand<T> : ICommand
     {
         private readonly Action<T> _execute;
@@ -445,4 +451,6 @@ namespace CHATiCH
             remove { CommandManager.RequerySuggested -= value; }
         }
     }
+
+    
 }
