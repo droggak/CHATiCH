@@ -5,14 +5,10 @@ using System;
 using System.Collections.ObjectModel;
 using System.IO;
 using System.Linq;
-using System.Text.Json;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Threading;
-using System.Globalization;
-using System.Windows.Data;
-using System.Windows.Media;
 
 namespace CHATiCH
 {
@@ -28,8 +24,9 @@ namespace CHATiCH
 
         public ICommand CloseTabCommand { get; }
 
-        private string HistoryRoot =>
-            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "CHATiCH", "History");
+        // Метапрефиксы (совместимо и безопасно для твоей версии S22)
+        private const string MetaPrefixId = "##id:";
+        private const string MetaPrefixReceipt = "##receipt:"; // ##receipt:{id}##
 
         public ChatWindow(XmppClient client)
         {
@@ -77,51 +74,17 @@ namespace CHATiCH
             }
         }
 
-        // === История ===
+        // ==== история ====
         private string GetHistoryFile(string jid)
         {
             string today = DateTime.Now.ToString("yyyy-MM-dd");
-            string folder = Path.Combine(HistoryRoot, today);
+            string folder = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "CHATiCH", "History", today);
             if (!Directory.Exists(folder))
                 Directory.CreateDirectory(folder);
-
             return Path.Combine(folder, $"{jid.Replace("@", "_at_")}.json");
         }
 
-        private ObservableCollection<ChatMessage> LoadHistory(string jid)
-        {
-            try
-            {
-                string file = GetHistoryFile(jid);
-                if (File.Exists(file))
-                {
-                    string json = File.ReadAllText(file);
-                    var history = JsonSerializer.Deserialize<ObservableCollection<ChatMessage>>(json);
-                    return history ?? new ObservableCollection<ChatMessage>();
-                }
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine("Ошибка загрузки истории: " + ex.Message);
-            }
-            return new ObservableCollection<ChatMessage>();
-        }
-
-        private void SaveHistory(string jid, ObservableCollection<ChatMessage> messages)
-        {
-            try
-            {
-                string file = GetHistoryFile(jid);
-                string json = JsonSerializer.Serialize(messages, new JsonSerializerOptions { WriteIndented = true });
-                File.WriteAllText(file, json);
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine("Ошибка сохранения истории: " + ex.Message);
-            }
-        }
-
-        // === Активность пользователя ===
+        // ==== активность/таймер/ростер ====
         private void OnActivity(object sender, PreProcessInputEventArgs e)
         {
             _lastActivityTime = DateTime.Now;
@@ -211,7 +174,6 @@ namespace CHATiCH
             }
         }
 
-        // === Работа с ростером ===
         private void LoadRoster()
         {
             try
@@ -261,37 +223,96 @@ namespace CHATiCH
             });
         }
 
-        private void OnRosterUpdated(object sender, EventArgs e)
-        {
-            Dispatcher.Invoke(LoadRoster);
-        }
+        private void OnRosterUpdated(object sender, EventArgs e) => Dispatcher.Invoke(LoadRoster);
 
-        // === Сообщения ===
+        // ==== обработка входящих сообщений и "мета" ====
         private void OnMessageReceived(object sender, MessageEventArgs e)
         {
             Dispatcher.Invoke(() =>
             {
+                string body = e.Message?.Body ?? string.Empty;
                 string bareJid = GetBareJid(e.Jid);
-                var tab = ChatTabsItems.FirstOrDefault(t => t.Jid == bareJid);
-                if (tab == null)
+
+                // 1) receipt ( ##receipt:{id}## ) — приходит от получателя, означает что наш исходящий стал прочитан
+                if (body.StartsWith(MetaPrefixReceipt))
                 {
-                    var messages = LoadHistory(bareJid);
-                    messages.Add(new ChatMessage { Author = bareJid, Text = e.Message.Body, Time = DateTime.Now, IsIncoming = true });
-                    tab = new ChatTab { Jid = bareJid, Header = bareJid, Content = messages };
-                    ChatTabsItems.Add(tab);
+                    int start = MetaPrefixReceipt.Length;
+                    int end = body.IndexOf("##", start);
+                    if (end > start)
+                    {
+                        string receiptId = body.Substring(start, end - start);
+                        // Найти своё исходящее сообщение и отметить его Read
+                        foreach (var tab in ChatTabsItems)
+                        {
+                            var list = tab.Content as ObservableCollection<ChatMessage>;
+                            if (list == null) continue;
+                            var mine = list.FirstOrDefault(m => !m.IsIncoming && !string.IsNullOrEmpty(m.Id) && m.Id == receiptId);
+                            if (mine != null)
+                            {
+                                mine.Status = MessageStatus.Read;
+                                HistoryManager.SaveHistory(tab.Jid, list);
+                                break;
+                            }
+                        }
+                    }
+                    return;
+                }
+
+                // 2) обычное сообщение, возможно с префиксом id ( ##id:{id}##text )
+                string incomingId = null;
+                string realText = body;
+
+                if (body.StartsWith(MetaPrefixId))
+                {
+                    int start = MetaPrefixId.Length;
+                    int end = body.IndexOf("##", start);
+                    if (end > start)
+                    {
+                        incomingId = body.Substring(start, end - start);
+                        realText = body.Substring(end + 2);
+                    }
+                }
+
+                var chatTab = ChatTabsItems.FirstOrDefault(t => t.Jid == bareJid);
+                if (chatTab == null)
+                {
+                    var messages = HistoryManager.LoadHistory(bareJid);
+                    var incoming = new ChatMessage
+                    {
+                        Id = incomingId,
+                        Author = bareJid,
+                        Text = realText,
+                        Time = DateTime.Now,
+                        IsIncoming = true,
+                        Status = MessageStatus.Sent // непрочитано
+                    };
+                    messages.Add(incoming);
+                    chatTab = new ChatTab { Jid = bareJid, Header = bareJid, Content = messages };
+                    ChatTabsItems.Add(chatTab);
+                    HistoryManager.SaveHistory(bareJid, messages);
                 }
                 else
                 {
-                    var existing = tab.Content as ObservableCollection<ChatMessage>;
+                    var existing = chatTab.Content as ObservableCollection<ChatMessage>;
                     if (existing != null)
                     {
-                        existing.Add(new ChatMessage { Author = bareJid, Text = e.Message.Body, Time = DateTime.Now, IsIncoming = true });
-                        SaveHistory(bareJid, existing);
+                        var incoming = new ChatMessage
+                        {
+                            Id = incomingId,
+                            Author = bareJid,
+                            Text = realText,
+                            Time = DateTime.Now,
+                            IsIncoming = true,
+                            Status = MessageStatus.Sent
+                        };
+                        existing.Add(incoming);
+                        HistoryManager.SaveHistory(bareJid, existing);
                     }
                 }
             });
         }
 
+        // ==== отправка сообщений: добавляем мета-ид в тело (##id:GUID##text) ====
         private void SendMessage_Click(object sender, RoutedEventArgs e)
         {
             if (_client == null || !_client.Connected)
@@ -300,18 +321,34 @@ namespace CHATiCH
                 return;
             }
 
-            var tab = ChatTabs.SelectedItem as ChatTab;
-            var messages = tab != null ? tab.Content as ObservableCollection<ChatMessage> : null;
+            var chatTab = ChatTabs.SelectedItem as ChatTab;
+            var messages = chatTab != null ? chatTab.Content as ObservableCollection<ChatMessage> : null;
 
-            if (tab != null && messages != null)
+            if (chatTab != null && messages != null)
             {
                 if (!string.IsNullOrWhiteSpace(MessageTextBox.Text))
                 {
                     try
                     {
-                        _client.SendMessage(new Jid(tab.Jid), MessageTextBox.Text);
-                        messages.Add(new ChatMessage { Author = "Я", Text = MessageTextBox.Text, Time = DateTime.Now, IsIncoming = false });
-                        SaveHistory(tab.Jid, messages);
+                        string msgId = Guid.NewGuid().ToString("N");
+                        string payload = $"{MetaPrefixId}{msgId}##{MessageTextBox.Text}";
+
+                        // отправляем текст с префиксом
+                        _client.SendMessage(new Jid(chatTab.Jid), payload);
+
+                        // локально добавляем исходящее сообщение (Status = Sent)
+                        var myMsg = new ChatMessage
+                        {
+                            Id = msgId,
+                            Author = "Я",
+                            Text = MessageTextBox.Text,
+                            Time = DateTime.Now,
+                            IsIncoming = false,
+                            Status = MessageStatus.Sent
+                        };
+                        messages.Add(myMsg);
+                        HistoryManager.SaveHistory(chatTab.Jid, messages);
+
                         MessageTextBox.Clear();
                     }
                     catch (Exception ex)
@@ -340,7 +377,7 @@ namespace CHATiCH
                 var existingTab = ChatTabsItems.FirstOrDefault(t => t.Jid == contact.Jid);
                 if (existingTab == null)
                 {
-                    var messages = LoadHistory(contact.Jid);
+                    var messages = HistoryManager.LoadHistory(contact.Jid);
                     var newTab = new ChatTab { Jid = contact.Jid, Header = contact.Name, Content = messages };
                     ChatTabsItems.Add(newTab);
                     ChatTabs.SelectedItem = newTab;
@@ -405,23 +442,54 @@ namespace CHATiCH
                 Console.WriteLine("Ошибка при обновлении статуса: " + ex.Message);
             }
         }
-    }
 
-    // === Модели и конвертеры ===
-    public class ChatMessage
-    {
-        public string Author { get; set; }
-        public string Text { get; set; }
-        public DateTime Time { get; set; }
-        public bool IsIncoming { get; set; }
-
-        public override string ToString()
+        // ==== SelectionChanged: при открытии вкладки отправляем квитанции за входящие сообщения ====
+        private void ChatTab_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {
-            string who = IsIncoming ? Author : "Я";
-            return $"{who}: {Text} [{Time:HH:mm}]";
+            if (ChatTabs.SelectedItem is ChatTab selectedTab)
+            {
+                var list = selectedTab.Content as ObservableCollection<ChatMessage>;
+                if (list == null) return;
+
+                // выбираем непрочитанные входящие, которые имеют Id (иначе нельзя отправить receipt)
+                var unreadIncoming = list.Where(m => m.IsIncoming && m.Status == MessageStatus.Sent && !string.IsNullOrEmpty(m.Id)).ToArray();
+                if (unreadIncoming.Length == 0) return;
+
+                // пометим локально как прочитанные
+                foreach (var msg in unreadIncoming)
+                    msg.Status = MessageStatus.Read;
+
+                // сохраним историю
+                HistoryManager.SaveHistory(selectedTab.Jid, list);
+
+                // отправим каждому отправителю "квитанцию" в виде простого сообщения: ##receipt:{id}##
+                foreach (var msg in unreadIncoming)
+                {
+                    try
+                    {
+                        string receiptPayload = $"{MetaPrefixReceipt}{msg.Id}##";
+                        _client.SendMessage(new Jid(selectedTab.Jid), receiptPayload);
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine("Ошибка при отправке receipt: " + ex.Message);
+                    }
+                }
+            }
+        }
+
+        // Кнопка "История"
+        private void OpenHistory_Click(object sender, RoutedEventArgs e)
+        {
+            if (ChatTabs.SelectedItem is ChatTab tab)
+            {
+                var h = new HistoryWindow(tab.Jid); // подгони под твой конструктор HistoryWindow
+                h.Show();
+            }
         }
     }
 
+    // ChatTab модель (Content = ObservableCollection<ChatMessage>)
     public class ChatTab
     {
         public string Header { get; set; }
@@ -429,8 +497,7 @@ namespace CHATiCH
         public string Jid { get; set; }
     }
 
-    
-
+    // RelayCommand уже был у тебя; оставляем без изменений
     public class RelayCommand<T> : ICommand
     {
         private readonly Action<T> _execute;
@@ -451,6 +518,4 @@ namespace CHATiCH
             remove { CommandManager.RequerySuggested -= value; }
         }
     }
-
-    
 }

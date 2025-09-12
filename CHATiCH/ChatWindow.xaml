@@ -52,10 +52,16 @@
                 <RowDefinition Height="Auto"/>
             </Grid.RowDefinitions>
 
-            <TabControl x:Name="ChatTabs" Grid.Row="0">
+            <!-- SelectionChanged слушает открытие вкладки для отправки квитанций -->
+            <TabControl x:Name="ChatTabs" Grid.Row="0" SelectionChanged="ChatTab_SelectionChanged">
                 <TabControl.ItemTemplate>
                     <DataTemplate>
                         <StackPanel Orientation="Horizontal">
+                            <StackPanel.ContextMenu>
+                                <ContextMenu>
+                                    <MenuItem Header="История" Click="OpenHistory_Click"/>
+                                </ContextMenu>
+                            </StackPanel.ContextMenu>
                             <TextBlock Text="{Binding Header}" Margin="0,0,5,0"/>
                             <Button Content="x"
                                     Command="{Binding DataContext.CloseTabCommand, RelativeSource={RelativeSource AncestorType=Window}}"
@@ -66,6 +72,7 @@
                         </StackPanel>
                     </DataTemplate>
                 </TabControl.ItemTemplate>
+
                 <TabControl.ContentTemplate>
                     <DataTemplate>
                         <ScrollViewer VerticalScrollBarVisibility="Auto">
@@ -75,18 +82,22 @@
                                      Background="White"
                                      x:Name="MessagesList">
                                 <ListBox.ItemTemplate>
-                                    <DataTemplate>
+                                    <DataTemplate DataType="{x:Type local:ChatMessage}">
                                         <StackPanel Orientation="Vertical" Margin="0,2">
                                             <TextBlock FontWeight="Bold"
                                                        Foreground="{Binding IsIncoming, Converter={StaticResource IncomingToBrushConverter}}"
                                                        Text="{Binding Author}" />
                                             <TextBlock Text="{Binding Text}" TextWrapping="Wrap"/>
-                                            <TextBlock Text="{Binding Time, StringFormat='{}{0:HH:mm}'}"
-                                                       FontSize="10" Foreground="Gray"
-                                                       HorizontalAlignment="Right"/>
+                                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                                                <TextBlock Text="{Binding Time, StringFormat='{}{0:HH:mm}'}"
+                                                           FontSize="10" Foreground="Gray"/>
+                                                <TextBlock Text="{Binding ReceiptText}"
+                                                           FontSize="10" Foreground="Gray" Margin="5,0,0,0"/>
+                                            </StackPanel>
                                         </StackPanel>
                                     </DataTemplate>
                                 </ListBox.ItemTemplate>
+
                                 <ListBox.Resources>
                                     <Style TargetType="ListBox">
                                         <EventSetter Event="Loaded" Handler="MessagesList_Loaded"/>

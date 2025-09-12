@@ -89,12 +89,24 @@
       <Generator>MSBuild:Compile</Generator>
       <SubType>Designer</SubType>
     </ApplicationDefinition>
+    <Compile Include="ChatMessage.cs" />
+    <Compile Include="EmojiTextConverter.cs" />
+    <Compile Include="HistoryManager.cs" />
+    <Compile Include="HistoryWindow.xaml.cs">
+      <DependentUpon>HistoryWindow.xaml</DependentUpon>
+    </Compile>
     <Compile Include="IncomingToBrushConverter.cs" />
+    <Compile Include="MessageStatus.cs" />
+    <Compile Include="MessageStatusToTextConverter.cs" />
     <Compile Include="StatusToBrushConverter.cs" />
     <Compile Include="UserContact.cs" />
     <Page Include="ChatWindow.xaml">
       <Generator>MSBuild:Compile</Generator>
       <SubType>Designer</SubType>
+    </Page>
+    <Page Include="HistoryWindow.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
     </Page>
     <Page Include="LoginForm.xaml">
       <Generator>MSBuild:Compile</Generator>
