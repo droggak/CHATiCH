@@ -1,9 +1,8 @@
 ﻿using S22.Xmpp.Client;
-using S22.Xmpp.Im;
 using System;
 using System.Windows;
 
-namespace PandionClone
+namespace CHATiCH
 {
     public partial class LoginForm : Window
     {
@@ -14,32 +13,33 @@ namespace PandionClone
 
         private void BtnLogin_Click(object sender, RoutedEventArgs e)
         {
-            string username = txtUsername.Text;
-            string password = txtPassword.Password;
-            string domain = txtDomain.Text;
-
             try
             {
-                XmppClient client = new XmppClient(
-                    hostname: domain,
-                    username: username,
-                    password: password,
-                    port: 5222,
-                    tls: true
-                );
+                string username = txtUsername.Text.Trim();
+                string password = txtPassword.Password.Trim();
+                string domain = txtDomain.Text.Trim();
 
+                if (string.IsNullOrEmpty(username) || string.IsNullOrEmpty(password) || string.IsNullOrEmpty(domain))
+                {
+                    MessageBox.Show("Заполните все поля!", "Ошибка", MessageBoxButton.OK, MessageBoxImage.Warning);
+                    return;
+                }
+
+                // создаём XMPP клиент
+                var client = new XmppClient(domain, username, password);
+
+                // пробуем подключиться
                 client.Connect();
-                client.SetStatus(Availability.Online, "Online via WPF");
 
-                MessageBox.Show("Успешный вход");
-
-                ChatWindow chatWindow = new ChatWindow(client);
+                // запускаем чат
+                var chatWindow = new ChatWindow(client);
                 chatWindow.Show();
+
                 this.Close();
             }
             catch (Exception ex)
             {
-                MessageBox.Show("Ошибка авторизации: " + ex.Message);
+                MessageBox.Show($"Ошибка при авторизации: {ex.Message}", "Ошибка", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
     }
