@@ -2,82 +2,90 @@
 using System.Collections.ObjectModel;
 using System.IO;
 using System.Linq;
-using System.Text.Json;
+using Newtonsoft.Json;
 
 namespace CHATiCH
 {
     public static class HistoryManager
     {
-        private static readonly string HistoryRoot =
-            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "CHATiCH", "History");
+        private static readonly string HistoryRoot = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "CHATiCH", "history");
 
-        private static string GetHistoryFile(string jid, DateTime date)
+        static HistoryManager()
         {
-            string dayFolder = date.ToString("yyyy-MM-dd");
-            string folder = Path.Combine(HistoryRoot, dayFolder);
+            Directory.CreateDirectory(HistoryRoot);
+        }
 
-            if (!Directory.Exists(folder))
-                Directory.CreateDirectory(folder);
+        public static void SaveHistory(string jid, ObservableCollection<ChatMessage> messages)
+        {
+            if (string.IsNullOrEmpty(jid) || messages == null) return;
 
-            return Path.Combine(folder, $"{jid.Replace("@", "_at_")}.json");
+            string userFolder = Path.Combine(HistoryRoot, jid);
+            Directory.CreateDirectory(userFolder);
+
+            string fileName = Path.Combine(userFolder, DateTime.Now.ToString("yyyy-MM-dd") + ".json");
+            try
+            {
+                File.WriteAllText(fileName, JsonConvert.SerializeObject(messages, Formatting.Indented));
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Ошибка при сохранении истории {jid}: {ex.Message}");
+            }
         }
 
         public static ObservableCollection<ChatMessage> LoadHistory(string jid, DateTime? date = null)
         {
-            try
-            {
-                string file = GetHistoryFile(jid, date ?? DateTime.Now);
-                if (File.Exists(file))
-                {
-                    string json = File.ReadAllText(file);
-                    var history = JsonSerializer.Deserialize<ObservableCollection<ChatMessage>>(json);
-                    return history ?? new ObservableCollection<ChatMessage>();
-                }
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine("Ошибка загрузки истории: " + ex.Message);
-            }
-            return new ObservableCollection<ChatMessage>();
-        }
+            var result = new ObservableCollection<ChatMessage>();
+            if (string.IsNullOrEmpty(jid)) return result;
 
-        public static void SaveHistory(string jid, ObservableCollection<ChatMessage> messages, DateTime? date = null)
-        {
+            string userFolder = Path.Combine(HistoryRoot, jid);
+            if (!Directory.Exists(userFolder)) return result;
+
+            string fileName = Path.Combine(userFolder, (date ?? DateTime.Now).ToString("yyyy-MM-dd") + ".json");
+            if (!File.Exists(fileName)) return result;
+
             try
             {
-                string file = GetHistoryFile(jid, date ?? DateTime.Now);
-                string json = JsonSerializer.Serialize(messages, new JsonSerializerOptions { WriteIndented = true });
-                File.WriteAllText(file, json);
+                string json = File.ReadAllText(fileName);
+                var messages = JsonConvert.DeserializeObject<ObservableCollection<ChatMessage>>(json);
+                if (messages != null)
+                    foreach (var msg in messages)
+                        result.Add(msg);
             }
             catch (Exception ex)
             {
-                Console.WriteLine("Ошибка сохранения истории: " + ex.Message);
+                Console.WriteLine($"Ошибка при загрузке истории {jid}: {ex.Message}");
             }
+
+            return result;
         }
 
         public static string[] GetAvailableDates(string jid)
         {
-            if (!Directory.Exists(HistoryRoot))
-                return Array.Empty<string>();
+            string userFolder = Path.Combine(HistoryRoot, jid);
+            if (!Directory.Exists(userFolder)) return Array.Empty<string>();
 
-            return Directory.GetDirectories(HistoryRoot)
-                .Where(d => File.Exists(Path.Combine(d, $"{jid.Replace("@", "_at_")}.json")))
-                .Select(Path.GetFileName)
+            return Directory.GetFiles(userFolder, "*.json")
+                .Select(f => Path.GetFileNameWithoutExtension(f))
+                .OrderByDescending(d => d)
                 .ToArray();
         }
 
-        public static void CleanupOldHistory(int keepDays = 365)
+        public static void CleanupOldHistory()
         {
-            if (!Directory.Exists(HistoryRoot))
-                return;
+            if (!Directory.Exists(HistoryRoot)) return;
 
-            foreach (var dir in Directory.GetDirectories(HistoryRoot))
+            foreach (var userFolder in Directory.GetDirectories(HistoryRoot))
             {
-                if (DateTime.TryParse(Path.GetFileName(dir), out var dirDate))
+                foreach (var file in Directory.GetFiles(userFolder, "*.json"))
                 {
-                    if ((DateTime.Now - dirDate).TotalDays > keepDays)
+                    if (DateTime.TryParse(Path.GetFileNameWithoutExtension(file), out var fileDate))
                     {
-                        try { Directory.Delete(dir, true); } catch { }
+                        if ((DateTime.Now - fileDate).TotalDays > 30)
+                        {
+                            try { File.Delete(file); } catch { }
+                        }
                     }
                 }
             }

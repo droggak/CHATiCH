@@ -3,12 +3,19 @@ using S22.Xmpp.Client;
 using S22.Xmpp.Im;
 using System;
 using System.Collections.ObjectModel;
+using System.Drawing;
 using System.IO;
 using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Data;
 using System.Windows.Input;
 using System.Windows.Threading;
+using Hardcodet.Wpf.TaskbarNotification;
+using System.Xml.Linq;
+using System.Xml;
+using System.ComponentModel;
+using Newtonsoft.Json;
 
 namespace CHATiCH
 {
@@ -16,6 +23,7 @@ namespace CHATiCH
     {
         private XmppClient _client;
         private DispatcherTimer _statusTimer;
+        private DispatcherTimer _saveDebounceTimer;
         private DateTime _lastActivityTime;
         private bool _manualStatusSet = false;
 
@@ -24,9 +32,16 @@ namespace CHATiCH
 
         public ICommand CloseTabCommand { get; }
 
-        // Метапрефиксы (совместимо и безопасно для твоей версии S22)
         private const string MetaPrefixId = "##id:";
-        private const string MetaPrefixReceipt = "##receipt:"; // ##receipt:{id}##
+        private const string MetaPrefixReceipt = "##receipt:";
+        private const string MetaEscape = "##escape##";
+
+        private TaskbarIcon _trayIcon;
+
+        private DispatcherTimer _typingTimer;
+
+        private string _debounceJid;
+        private ObservableCollection<ChatMessage> _debounceMessages;
 
         public ChatWindow(XmppClient client)
         {
@@ -47,10 +62,12 @@ namespace CHATiCH
 
             _lastActivityTime = DateTime.Now;
 
-            _statusTimer = new DispatcherTimer();
-            _statusTimer.Interval = TimeSpan.FromSeconds(10);
+            _statusTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(10) };
             _statusTimer.Tick += StatusTimer_Tick;
             _statusTimer.Start();
+
+            _saveDebounceTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(5) };
+            _saveDebounceTimer.Tick += SaveDebounceTimer_Tick;
 
             InputManager.Current.PreProcessInput += OnActivity;
             Closing += ChatWindow_Closing;
@@ -58,11 +75,22 @@ namespace CHATiCH
             if (StatusComboBox != null && StatusComboBox.Items.Count > 0)
                 StatusComboBox.SelectedIndex = 0;
 
-            UpdateStatus(Availability.Online, StatusMessageBox != null ? (StatusMessageBox.Text ?? "") : "Online via WPF");
+            UpdateStatus(Availability.Online, StatusMessageBox?.Text ?? "Online via WPF");
+
+            HistoryManager.CleanupOldHistory();
+
+            _trayIcon = new TaskbarIcon
+            {
+                Icon = new Icon("app.ico"),
+                ToolTipText = "CHATiCH",
+                Visibility = Visibility.Visible
+            };
+            _trayIcon.TrayBalloonTipClicked += (s, e) => Activate();
         }
 
         private void ChatWindow_Closing(object sender, System.ComponentModel.CancelEventArgs e)
         {
+            _trayIcon?.Dispose();
             try
             {
                 if (_client != null && _client.Connected)
@@ -70,31 +98,20 @@ namespace CHATiCH
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"Ошибка при отключении: {ex.Message}", "Ошибка", MessageBoxButton.OK, MessageBoxImage.Error);
+                Console.WriteLine($"Ошибка при отключении: {ex.Message}");
             }
         }
 
-        // ==== история ====
-        private string GetHistoryFile(string jid)
-        {
-            string today = DateTime.Now.ToString("yyyy-MM-dd");
-            string folder = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "CHATiCH", "History", today);
-            if (!Directory.Exists(folder))
-                Directory.CreateDirectory(folder);
-            return Path.Combine(folder, $"{jid.Replace("@", "_at_")}.json");
-        }
-
-        // ==== активность/таймер/ростер ====
         private void OnActivity(object sender, PreProcessInputEventArgs e)
         {
             _lastActivityTime = DateTime.Now;
             if (!_manualStatusSet && StatusComboBox != null)
             {
                 var selected = StatusComboBox.SelectedItem as ComboBoxItem;
-                if (selected != null && selected.Tag != null && selected.Tag.ToString() == "Away")
+                if (selected?.Tag?.ToString() == "Away")
                 {
                     StatusComboBox.SelectedIndex = 0;
-                    UpdateStatus(Availability.Online, StatusMessageBox != null ? (StatusMessageBox.Text ?? "") : "Online via WPF");
+                    UpdateStatus(Availability.Online, StatusMessageBox?.Text ?? "Online via WPF");
                 }
             }
         }
@@ -108,28 +125,25 @@ namespace CHATiCH
                     var idleTime = DateTime.Now - _lastActivityTime;
                     if (idleTime.TotalMinutes >= 5)
                     {
-                        if (StatusComboBox != null && StatusComboBox.SelectedIndex != 1)
+                        if (StatusComboBox?.SelectedIndex != 1)
                         {
                             StatusComboBox.SelectedIndex = 1;
-                            UpdateStatus(Availability.Away, StatusMessageBox != null ? (StatusMessageBox.Text ?? "Отошел") : "Отошел");
+                            UpdateStatus(Availability.Away, StatusMessageBox?.Text ?? "Отошел");
                         }
                     }
                     else
                     {
-                        if (StatusComboBox != null)
+                        var sel = StatusComboBox?.SelectedItem as ComboBoxItem;
+                        if (sel?.Tag?.ToString() == "Away")
                         {
-                            var sel = StatusComboBox.SelectedItem as ComboBoxItem;
-                            if (sel != null && sel.Tag != null && sel.Tag.ToString() == "Away")
-                            {
-                                StatusComboBox.SelectedIndex = 0;
-                                UpdateStatus(Availability.Online, StatusMessageBox != null ? (StatusMessageBox.Text ?? "") : "Online via WPF");
-                            }
+                            StatusComboBox.SelectedIndex = 0;
+                            UpdateStatus(Availability.Online, StatusMessageBox?.Text ?? "Online via WPF");
                         }
                     }
                 }
 
                 var currentAvailability = GetUiSelectedAvailability();
-                var currentStatusText = StatusMessageBox != null ? (StatusMessageBox.Text ?? "") : "";
+                var currentStatusText = StatusMessageBox?.Text ?? "";
                 UpdateStatus(currentAvailability, currentStatusText);
 
                 var roster = _client.GetRoster();
@@ -160,18 +174,9 @@ namespace CHATiCH
 
         private Availability GetUiSelectedAvailability()
         {
-            try
-            {
-                var selected = StatusComboBox != null ? StatusComboBox.SelectedItem as ComboBoxItem : null;
-                var tag = selected != null ? selected.Tag as string : null;
-                if (string.Equals(tag, "Away", StringComparison.OrdinalIgnoreCase))
-                    return Availability.Away;
-                return Availability.Online;
-            }
-            catch
-            {
-                return Availability.Online;
-            }
+            var selected = StatusComboBox?.SelectedItem as ComboBoxItem;
+            var tag = selected?.Tag as string;
+            return string.Equals(tag, "Away", StringComparison.OrdinalIgnoreCase) ? Availability.Away : Availability.Online;
         }
 
         private void LoadRoster()
@@ -184,8 +189,7 @@ namespace CHATiCH
                     foreach (var item in roster)
                     {
                         var bareJid = GetBareJid(item.Jid);
-                        var contact = Contacts.FirstOrDefault(c => c.Jid == bareJid);
-                        if (contact == null)
+                        if (!Contacts.Any(c => c.Jid == bareJid))
                         {
                             Contacts.Add(new UserContact
                             {
@@ -208,8 +212,7 @@ namespace CHATiCH
         {
             Dispatcher.Invoke(() =>
             {
-                var args = e as StatusEventArgs;
-                if (args != null)
+                if (e is StatusEventArgs args)
                 {
                     var bareJid = GetBareJid(args.Jid);
                     var contact = Contacts.FirstOrDefault(c => c.Jid == bareJid);
@@ -217,7 +220,6 @@ namespace CHATiCH
                     {
                         contact.Availability = args.Status.Availability;
                         contact.StatusText = args.Status.Message ?? "Неизвестен";
-                        ContactsList.Items.Refresh();
                     }
                 }
             });
@@ -225,7 +227,6 @@ namespace CHATiCH
 
         private void OnRosterUpdated(object sender, EventArgs e) => Dispatcher.Invoke(LoadRoster);
 
-        // ==== обработка входящих сообщений и "мета" ====
         private void OnMessageReceived(object sender, MessageEventArgs e)
         {
             Dispatcher.Invoke(() =>
@@ -233,7 +234,12 @@ namespace CHATiCH
                 string body = e.Message?.Body ?? string.Empty;
                 string bareJid = GetBareJid(e.Jid);
 
-                // 1) receipt ( ##receipt:{id}## ) — приходит от получателя, означает что наш исходящий стал прочитан
+                if (string.IsNullOrWhiteSpace(body))
+                    return;
+
+                if (body.StartsWith(MetaEscape))
+                    body = body.Substring(MetaEscape.Length);
+
                 if (body.StartsWith(MetaPrefixReceipt))
                 {
                     int start = MetaPrefixReceipt.Length;
@@ -241,24 +247,52 @@ namespace CHATiCH
                     if (end > start)
                     {
                         string receiptId = body.Substring(start, end - start);
-                        // Найти своё исходящее сообщение и отметить его Read
                         foreach (var tab in ChatTabsItems)
                         {
-                            var list = tab.Content as ObservableCollection<ChatMessage>;
-                            if (list == null) continue;
-                            var mine = list.FirstOrDefault(m => !m.IsIncoming && !string.IsNullOrEmpty(m.Id) && m.Id == receiptId);
-                            if (mine != null)
+                            if (tab.Content is ObservableCollection<ChatMessage> list)
                             {
-                                mine.Status = MessageStatus.Read;
-                                HistoryManager.SaveHistory(tab.Jid, list);
-                                break;
+                                var mine = list.FirstOrDefault(m => !m.IsIncoming && m.Id == receiptId);
+                                if (mine != null)
+                                {
+                                    mine.Status = MessageStatus.Read;
+                                    ScheduleSave(tab.Jid, list);
+                                    break;
+                                }
                             }
                         }
                     }
                     return;
                 }
 
-                // 2) обычное сообщение, возможно с префиксом id ( ##id:{id}##text )
+                if (body.StartsWith("##state:"))
+                {
+                    int start = "##state:".Length;
+                    int end = body.IndexOf("##", start);
+                    string state = end > start ? body.Substring(start, end - start) : "";
+
+                    var chatTab = ChatTabsItems.FirstOrDefault(t => t.Jid == bareJid);
+                    if (chatTab != null)
+                    {
+                        switch (state)
+                        {
+                            case "composing":
+                                chatTab.TypingText = $"{bareJid} печатает...";
+                                break;
+                            case "paused":
+                                chatTab.TypingText = "";
+                                break;
+                            case "active":
+                                chatTab.TypingText = "";
+                                break;
+                            default:
+                                chatTab.TypingText = "";
+                                break;
+                        }
+                    }
+
+                    return;
+                }
+
                 string incomingId = null;
                 string realText = body;
 
@@ -273,10 +307,21 @@ namespace CHATiCH
                     }
                 }
 
-                var chatTab = ChatTabsItems.FirstOrDefault(t => t.Jid == bareJid);
-                if (chatTab == null)
+                var chatTabExist = ChatTabsItems.FirstOrDefault(t => t.Jid == bareJid);
+                ObservableCollection<ChatMessage> messages;
+                if (chatTabExist == null)
                 {
-                    var messages = HistoryManager.LoadHistory(bareJid);
+                    messages = HistoryManager.LoadHistory(bareJid);
+                    chatTabExist = new ChatTab { Jid = bareJid, Header = bareJid, Content = messages, TypingText = "" };
+                    ChatTabsItems.Add(chatTabExist);
+                }
+                else
+                {
+                    messages = chatTabExist.Content as ObservableCollection<ChatMessage>;
+                }
+
+                if (messages != null)
+                {
                     var incoming = new ChatMessage
                     {
                         Id = incomingId,
@@ -284,82 +329,60 @@ namespace CHATiCH
                         Text = realText,
                         Time = DateTime.Now,
                         IsIncoming = true,
-                        Status = MessageStatus.Sent // непрочитано
+                        Status = MessageStatus.Sent
                     };
                     messages.Add(incoming);
-                    chatTab = new ChatTab { Jid = bareJid, Header = bareJid, Content = messages };
-                    ChatTabsItems.Add(chatTab);
-                    HistoryManager.SaveHistory(bareJid, messages);
-                }
-                else
-                {
-                    var existing = chatTab.Content as ObservableCollection<ChatMessage>;
-                    if (existing != null)
+                    ScheduleSave(bareJid, messages);
+
+                    if (!IsActive)
                     {
-                        var incoming = new ChatMessage
-                        {
-                            Id = incomingId,
-                            Author = bareJid,
-                            Text = realText,
-                            Time = DateTime.Now,
-                            IsIncoming = true,
-                            Status = MessageStatus.Sent
-                        };
-                        existing.Add(incoming);
-                        HistoryManager.SaveHistory(bareJid, existing);
+                        _trayIcon.ShowBalloonTip("Новое сообщение", $"{bareJid}: {realText.Truncate(50)}", BalloonIcon.Info);
                     }
                 }
             });
         }
 
-        // ==== отправка сообщений: добавляем мета-ид в тело (##id:GUID##text) ====
         private void SendMessage_Click(object sender, RoutedEventArgs e)
         {
-            if (_client == null || !_client.Connected)
+            if (_client == null || !_client.Connected) return;
+
+            var chatTab = ChatTabs.SelectedItem as ChatTab;
+            if (chatTab == null)
             {
-                MessageBox.Show("Клиент не подключён к серверу.", "Ошибка", MessageBoxButton.OK, MessageBoxImage.Error);
+                MessageBox.Show("Выберите чат перед отправкой сообщения!", "Ошибка", MessageBoxButton.OK, MessageBoxImage.Warning);
                 return;
             }
 
-            var chatTab = ChatTabs.SelectedItem as ChatTab;
-            var messages = chatTab != null ? chatTab.Content as ObservableCollection<ChatMessage> : null;
-
-            if (chatTab != null && messages != null)
+            var messages = chatTab.Content as ObservableCollection<ChatMessage>;
+            if (messages != null && !string.IsNullOrWhiteSpace(MessageTextBox.Text))
             {
-                if (!string.IsNullOrWhiteSpace(MessageTextBox.Text))
+                try
                 {
-                    try
+                    string text = MessageTextBox.Text;
+                    string msgId = Guid.NewGuid().ToString("N");
+                    string payload = $"{MetaPrefixId}{msgId}##" + (text.StartsWith("##") ? MetaEscape + text : text);
+
+                    _client.SendMessage(new Jid(chatTab.Jid), payload);
+
+                    var myMsg = new ChatMessage
                     {
-                        string msgId = Guid.NewGuid().ToString("N");
-                        string payload = $"{MetaPrefixId}{msgId}##{MessageTextBox.Text}";
+                        Id = msgId,
+                        Author = "Я",
+                        Text = text,
+                        Time = DateTime.Now,
+                        IsIncoming = false,
+                        Status = MessageStatus.Sent
+                    };
+                    messages.Add(myMsg);
+                    ScheduleSave(chatTab.Jid, messages);
 
-                        // отправляем текст с префиксом
-                        _client.SendMessage(new Jid(chatTab.Jid), payload);
-
-                        // локально добавляем исходящее сообщение (Status = Sent)
-                        var myMsg = new ChatMessage
-                        {
-                            Id = msgId,
-                            Author = "Я",
-                            Text = MessageTextBox.Text,
-                            Time = DateTime.Now,
-                            IsIncoming = false,
-                            Status = MessageStatus.Sent
-                        };
-                        messages.Add(myMsg);
-                        HistoryManager.SaveHistory(chatTab.Jid, messages);
-
-                        MessageTextBox.Clear();
-                    }
-                    catch (Exception ex)
-                    {
-                        MessageBox.Show("Ошибка при отправке сообщения: " + ex.Message, "Ошибка", MessageBoxButton.OK, MessageBoxImage.Error);
-                    }
+                    MessageTextBox.Clear();
+                    SendChatState(chatTab.Jid, "active");
                 }
-            }
-            else
-            {
-                MessageBox.Show("Выберите вкладку для отправки сообщения.", "Ошибка", MessageBoxButton.OK, MessageBoxImage.Error);
+                catch (Exception ex)
+                {
+                    Console.WriteLine("Ошибка при отправке: " + ex.Message);
+                }
             }
         }
 
@@ -369,16 +392,54 @@ namespace CHATiCH
                 SendMessage_Click(sender, new RoutedEventArgs());
         }
 
+        private void MessageTextBox_TextChanged(object sender, TextChangedEventArgs e)
+        {
+            var chatTab = ChatTabs.SelectedItem as ChatTab;
+            if (chatTab != null)
+            {
+                var jid = chatTab.Jid;
+                if (!string.IsNullOrEmpty(MessageTextBox.Text))
+                {
+                    SendChatState(jid, "composing");
+
+                    if (_typingTimer == null)
+                    {
+                        _typingTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(3) };
+                        _typingTimer.Tick += (s, args) =>
+                        {
+                            _typingTimer.Stop();
+                            SendChatState(jid, "paused");
+                        };
+                    }
+                    else
+                    {
+                        _typingTimer.Stop();
+                    }
+
+                    _typingTimer.Start();
+                }
+                else
+                {
+                    SendChatState(jid, "paused");
+                }
+            }
+        }
+
+        private void SendChatState(string jid, string state)
+        {
+            string payload = $"##state:{state}##";
+            _client.SendMessage(new Jid(jid), payload);
+        }
+
         private void ContactsList_MouseDoubleClick(object sender, MouseButtonEventArgs e)
         {
-            var contact = ContactsList.SelectedItem as UserContact;
-            if (contact != null)
+            if (ContactsList.SelectedItem is UserContact contact)
             {
                 var existingTab = ChatTabsItems.FirstOrDefault(t => t.Jid == contact.Jid);
                 if (existingTab == null)
                 {
                     var messages = HistoryManager.LoadHistory(contact.Jid);
-                    var newTab = new ChatTab { Jid = contact.Jid, Header = contact.Name, Content = messages };
+                    var newTab = new ChatTab { Jid = contact.Jid, Header = contact.Name, Content = messages, TypingText = "" };
                     ChatTabsItems.Add(newTab);
                     ChatTabs.SelectedItem = newTab;
                 }
@@ -387,13 +448,6 @@ namespace CHATiCH
                     ChatTabs.SelectedItem = existingTab;
                 }
             }
-        }
-
-        private void MessagesList_Loaded(object sender, RoutedEventArgs e)
-        {
-            var listBox = sender as ListBox;
-            if (listBox != null && listBox.Items.Count > 0)
-                listBox.ScrollIntoView(listBox.Items[listBox.Items.Count - 1]);
         }
 
         private string GetBareJid(Jid jid) => $"{jid.Node}@{jid.Domain}";
@@ -406,28 +460,15 @@ namespace CHATiCH
 
         private void StatusComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {
-            var selected = StatusComboBox != null ? StatusComboBox.SelectedItem as ComboBoxItem : null;
-            if (selected != null && selected.Tag != null)
-            {
-                _manualStatusSet = true;
-                var tag = selected.Tag.ToString();
-                Availability availability = (string.Equals(tag, "Away", StringComparison.OrdinalIgnoreCase))
-                    ? Availability.Away
-                    : Availability.Online;
-
-                UpdateStatus(availability, StatusMessageBox != null ? (StatusMessageBox.Text ?? "") : "");
-            }
+            _manualStatusSet = true;
+            var availability = GetUiSelectedAvailability();
+            UpdateStatus(availability, StatusMessageBox?.Text ?? "");
         }
 
         private void StatusMessageBox_LostFocus(object sender, RoutedEventArgs e)
         {
-            var selected = StatusComboBox != null ? StatusComboBox.SelectedItem as ComboBoxItem : null;
-            var tag = selected != null ? selected.Tag as string : null;
-            Availability availability = (string.Equals(tag, "Away", StringComparison.OrdinalIgnoreCase))
-                ? Availability.Away
-                : Availability.Online;
-
-            UpdateStatus(availability, StatusMessageBox != null ? (StatusMessageBox.Text ?? "") : "");
+            var availability = GetUiSelectedAvailability();
+            UpdateStatus(availability, StatusMessageBox?.Text ?? "");
         }
 
         private void UpdateStatus(Availability availability, string statusText)
@@ -435,69 +476,104 @@ namespace CHATiCH
             try
             {
                 if (_client != null && _client.Connected)
-                    _client.SetStatus(availability, statusText ?? "");
+                    _client.SetStatus(availability, statusText);
             }
             catch (Exception ex)
             {
-                Console.WriteLine("Ошибка при обновлении статуса: " + ex.Message);
+                Console.WriteLine("Ошибка обновления статуса: " + ex.Message);
             }
         }
 
-        // ==== SelectionChanged: при открытии вкладки отправляем квитанции за входящие сообщения ====
         private void ChatTab_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {
             if (ChatTabs.SelectedItem is ChatTab selectedTab)
             {
-                var list = selectedTab.Content as ObservableCollection<ChatMessage>;
-                if (list == null) return;
-
-                // выбираем непрочитанные входящие, которые имеют Id (иначе нельзя отправить receipt)
-                var unreadIncoming = list.Where(m => m.IsIncoming && m.Status == MessageStatus.Sent && !string.IsNullOrEmpty(m.Id)).ToArray();
-                if (unreadIncoming.Length == 0) return;
-
-                // пометим локально как прочитанные
-                foreach (var msg in unreadIncoming)
-                    msg.Status = MessageStatus.Read;
-
-                // сохраним историю
-                HistoryManager.SaveHistory(selectedTab.Jid, list);
-
-                // отправим каждому отправителю "квитанцию" в виде простого сообщения: ##receipt:{id}##
-                foreach (var msg in unreadIncoming)
+                if (selectedTab.Content is ObservableCollection<ChatMessage> list)
                 {
-                    try
+                    var unreadIncoming = list.Where(m => m.IsIncoming && m.Status == MessageStatus.Sent && !string.IsNullOrEmpty(m.Id)).ToArray();
+                    if (unreadIncoming.Length > 0)
                     {
-                        string receiptPayload = $"{MetaPrefixReceipt}{msg.Id}##";
-                        _client.SendMessage(new Jid(selectedTab.Jid), receiptPayload);
-                    }
-                    catch (Exception ex)
-                    {
-                        Console.WriteLine("Ошибка при отправке receipt: " + ex.Message);
+                        foreach (var msg in unreadIncoming)
+                            msg.Status = MessageStatus.Read;
+
+                        ScheduleSave(selectedTab.Jid, list);
+
+                        foreach (var msg in unreadIncoming)
+                        {
+                            try
+                            {
+                                string receiptPayload = $"{MetaPrefixReceipt}{msg.Id}##";
+                                _client.SendMessage(new Jid(selectedTab.Jid), receiptPayload);
+                            }
+                            catch (Exception ex)
+                            {
+                                Console.WriteLine("Ошибка отправки receipt: " + ex.Message);
+                            }
+                        }
                     }
                 }
             }
         }
 
-        // Кнопка "История"
         private void OpenHistory_Click(object sender, RoutedEventArgs e)
         {
             if (ChatTabs.SelectedItem is ChatTab tab)
             {
-                var h = new HistoryWindow(tab.Jid); // подгони под твой конструктор HistoryWindow
-                h.Show();
+                new HistoryWindow(tab.Jid).Show();
             }
+        }
+
+        private void ScheduleSave(string jid, ObservableCollection<ChatMessage> messages)
+        {
+            if (messages == null || string.IsNullOrEmpty(jid)) return;
+            _debounceJid = jid;
+            _debounceMessages = messages;
+            _saveDebounceTimer.Stop();
+            _saveDebounceTimer.Start();
+        }
+
+        private void SaveDebounceTimer_Tick(object sender, EventArgs e)
+        {
+            _saveDebounceTimer.Stop();
+            if (_debounceMessages != null && !string.IsNullOrEmpty(_debounceJid))
+            {
+                try
+                {
+                    HistoryManager.SaveHistory(_debounceJid, _debounceMessages);
+                    Console.WriteLine($"История сохранена: {_debounceJid}, сообщений: {_debounceMessages.Count}");
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Ошибка сохранения истории: {ex}");
+                }
+            }
+        }
+
+        private void SearchTextBox_TextChanged(object sender, TextChangedEventArgs e)
+        {
+            var view = CollectionViewSource.GetDefaultView(Contacts);
+            view.Filter = o =>
+            {
+                if (o is UserContact contact)
+                {
+                    string search = SearchTextBox.Text.ToLower();
+                    return string.IsNullOrEmpty(search) ||
+                           contact.Name.ToLower().Contains(search) ||
+                           contact.Jid.ToLower().Contains(search);
+                }
+                return false;
+            };
         }
     }
 
-    // ChatTab модель (Content = ObservableCollection<ChatMessage>)
     public class ChatTab
     {
         public string Header { get; set; }
         public object Content { get; set; }
         public string Jid { get; set; }
+        public string TypingText { get; set; } = "";
     }
 
-    // RelayCommand уже был у тебя; оставляем без изменений
     public class RelayCommand<T> : ICommand
     {
         private readonly Action<T> _execute;
@@ -516,6 +592,15 @@ namespace CHATiCH
         {
             add { CommandManager.RequerySuggested += value; }
             remove { CommandManager.RequerySuggested -= value; }
+        }
+    }
+
+    public static class StringExtensions
+    {
+        public static string Truncate(this string value, int maxLength)
+        {
+            if (string.IsNullOrEmpty(value)) return value;
+            return value.Length <= maxLength ? value : value.Substring(0, maxLength) + "...";
         }
     }
 }

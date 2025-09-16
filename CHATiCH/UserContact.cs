@@ -1,46 +1,70 @@
 ﻿using S22.Xmpp;
 using S22.Xmpp.Im;
 using System.ComponentModel;
-using System.Runtime.CompilerServices;
+using System.Windows.Media;
 
 namespace CHATiCH
 {
     public class UserContact : INotifyPropertyChanged
     {
-        private string _jid;
-        private string _name;
         private Availability _availability;
         private string _statusText;
 
-        public event PropertyChangedEventHandler PropertyChanged;
-
-        public string Jid
-        {
-            get => _jid;
-            set { _jid = value; OnPropertyChanged(); }
-        }
-
-        public string Name
-        {
-            get => _name;
-            set { _name = value; OnPropertyChanged(); }
-        }
+        public string Jid { get; set; }
+        public string Name { get; set; }
 
         public Availability Availability
         {
-            get => _availability;
-            set { _availability = value; OnPropertyChanged(); }
+            get { return _availability; }
+            set
+            {
+                if (_availability != value)
+                {
+                    _availability = value;
+                    OnPropertyChanged(nameof(Availability));
+                    OnPropertyChanged(nameof(StatusBrush));
+                }
+            }
         }
 
         public string StatusText
         {
-            get => _statusText;
-            set { _statusText = value; OnPropertyChanged(); }
+            get { return _statusText; }
+            set
+            {
+                if (_statusText != value)
+                {
+                    _statusText = value;
+                    OnPropertyChanged(nameof(StatusText));
+                }
+            }
         }
 
-        protected void OnPropertyChanged([CallerMemberName] string propertyName = null)
+        // === Новый код ===
+        public Brush StatusBrush
         {
-            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
+            get
+            {
+                switch (Availability)
+                {
+                    case Availability.Online:
+                        return Brushes.Green;
+                    case Availability.Away:
+                        return Brushes.Orange;
+                    case Availability.Offline:
+                        return Brushes.Gray;
+                    default:
+                        return Brushes.Gray;
+                }
+            }
+        }
+
+        public event PropertyChangedEventHandler PropertyChanged;
+        protected void OnPropertyChanged(string name)
+        {
+            var handler = PropertyChanged;
+            if (handler != null)
+                handler(this, new PropertyChangedEventArgs(name));
         }
     }
 }

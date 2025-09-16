@@ -1,5 +1,6 @@
 ﻿using System;
 using System.ComponentModel;
+using System.Windows.Media;
 
 namespace CHATiCH
 {
@@ -8,20 +9,21 @@ namespace CHATiCH
         private MessageStatus _status;
         private bool _isIncoming;
 
-        public string Id { get; set; } // может быть null
+        public string Id { get; set; }
         public string Author { get; set; }
         public string Text { get; set; }
         public DateTime Time { get; set; }
 
         public bool IsIncoming
         {
-            get => _isIncoming;
+            get { return _isIncoming; }
             set
             {
                 if (_isIncoming != value)
                 {
                     _isIncoming = value;
                     OnPropertyChanged(nameof(IsIncoming));
+                    OnPropertyChanged(nameof(AuthorBrush));
                     OnPropertyChanged(nameof(ReceiptText));
                 }
             }
@@ -29,7 +31,7 @@ namespace CHATiCH
 
         public MessageStatus Status
         {
-            get => _status;
+            get { return _status; }
             set
             {
                 if (_status != value)
@@ -41,19 +43,21 @@ namespace CHATiCH
             }
         }
 
-        // Для биндинга: разные тексты для входящих и исходящих
+        public Brush AuthorBrush
+        {
+            get { return IsIncoming ? Brushes.Blue : Brushes.Green; }
+        }
+
         public string ReceiptText
         {
             get
             {
                 if (IsIncoming)
                 {
-                    // входящее: • = не прочитано, "" = прочитано
                     return Status == MessageStatus.Read ? "" : "•";
                 }
                 else
                 {
-                    // исходящее: • Отправлено или ✔ Прочитано
                     return Status == MessageStatus.Read ? "✔ Прочитано" : "• Отправлено";
                 }
             }
@@ -62,10 +66,15 @@ namespace CHATiCH
         public override string ToString()
         {
             string who = IsIncoming ? Author : "Я";
-            return $"{who}: {Text} [{Time:HH:mm}] ({Status})";
+            return string.Format("{0}: {1} [{2:HH:mm}] ({3})", who, Text, Time, Status);
         }
 
         public event PropertyChangedEventHandler PropertyChanged;
-        protected void OnPropertyChanged(string name) => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
+        protected void OnPropertyChanged(string name)
+        {
+            var handler = PropertyChanged;
+            if (handler != null)
+                handler(this, new PropertyChangedEventArgs(name));
+        }
     }
 }

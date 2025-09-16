@@ -2,10 +2,11 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:local="clr-namespace:CHATiCH"
+        xmlns:i="http://schemas.microsoft.com/xaml/behaviors"
+        xmlns:md="clr-namespace:MdXaml;assembly=MdXaml"
         Title="Чат" Height="600" Width="900">
     <Window.Resources>
-        <local:StatusToBrushConverter x:Key="StatusToBrushConverter" />
-        <local:IncomingToBrushConverter x:Key="IncomingToBrushConverter" />
+        <!-- Конвертеры больше не нужны -->
     </Window.Resources>
 
     <Grid>
@@ -16,7 +17,7 @@
 
         <!-- Левая колонка: статус и контакты -->
         <DockPanel Grid.Column="0" Margin="5">
-            <StackPanel DockPanel.Dock="Top" Margin="0,0,0,10">
+            <StackPanel DockPanel.Dock="Top" Margin="0,0,0,10" Height="92">
                 <ComboBox x:Name="StatusComboBox" SelectionChanged="StatusComboBox_SelectionChanged" SelectedIndex="0">
                     <ComboBoxItem Content="Онлайн" Tag="Online"/>
                     <ComboBoxItem Content="Отошел" Tag="Away"/>
@@ -25,6 +26,20 @@
                          Margin="0,5,0,0"
                          Text="Online via WPF"
                          LostFocus="StatusMessageBox_LostFocus"/>
+                <Label x:Name="label" Content="Поиск" Width="46" VerticalContentAlignment="Stretch" HorizontalAlignment="Left"/>
+                <TextBox x:Name="SearchTextBox" TextChanged="SearchTextBox_TextChanged" 
+                         RenderTransformOrigin="0.5,0.5" 
+                         Width="210" 
+                         Height="19" HorizontalAlignment="Left" >
+                    <TextBox.RenderTransform>
+                        <TransformGroup>
+                            <ScaleTransform ScaleX="-1" ScaleY="-1"/>
+                            <SkewTransform/>
+                            <RotateTransform Angle="180"/>
+                            <TranslateTransform/>
+                        </TransformGroup>
+                    </TextBox.RenderTransform>
+                </TextBox>
             </StackPanel>
 
             <ListBox x:Name="ContactsList"
@@ -33,8 +48,9 @@
                 <ListBox.ItemTemplate>
                     <DataTemplate>
                         <StackPanel Orientation="Horizontal">
+                            <!-- Используем StatusBrush напрямую -->
                             <Ellipse Width="10" Height="10" Margin="0,0,5,0"
-                                     Fill="{Binding Availability, Converter={StaticResource StatusToBrushConverter}}"/>
+                                     Fill="{Binding StatusBrush}"/>
                             <TextBlock Text="{Binding Name}"/>
                             <TextBlock Text=" (" Margin="5,0,0,0"/>
                             <TextBlock Text="{Binding StatusText}" Foreground="Gray"/>
@@ -52,7 +68,6 @@
                 <RowDefinition Height="Auto"/>
             </Grid.RowDefinitions>
 
-            <!-- SelectionChanged слушает открытие вкладки для отправки квитанций -->
             <TabControl x:Name="ChatTabs" Grid.Row="0" SelectionChanged="ChatTab_SelectionChanged">
                 <TabControl.ItemTemplate>
                     <DataTemplate>
@@ -75,43 +90,44 @@
 
                 <TabControl.ContentTemplate>
                     <DataTemplate>
-                        <ScrollViewer VerticalScrollBarVisibility="Auto">
-                            <ListBox ItemsSource="{Binding Content}"
-                                     Margin="5"
-                                     BorderThickness="0"
-                                     Background="White"
-                                     x:Name="MessagesList">
-                                <ListBox.ItemTemplate>
-                                    <DataTemplate DataType="{x:Type local:ChatMessage}">
-                                        <StackPanel Orientation="Vertical" Margin="0,2">
-                                            <TextBlock FontWeight="Bold"
-                                                       Foreground="{Binding IsIncoming, Converter={StaticResource IncomingToBrushConverter}}"
-                                                       Text="{Binding Author}" />
-                                            <TextBlock Text="{Binding Text}" TextWrapping="Wrap"/>
-                                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
-                                                <TextBlock Text="{Binding Time, StringFormat='{}{0:HH:mm}'}"
-                                                           FontSize="10" Foreground="Gray"/>
-                                                <TextBlock Text="{Binding ReceiptText}"
-                                                           FontSize="10" Foreground="Gray" Margin="5,0,0,0"/>
+                        <DockPanel>
+                            <Label DockPanel.Dock="Bottom" Content="{Binding TypingText}" Foreground="Gray" />
+                            <ScrollViewer VerticalScrollBarVisibility="Auto">
+                                <ListBox ItemsSource="{Binding Content}"
+                                         Margin="5"
+                                         BorderThickness="0"
+                                         Background="White"
+                                         x:Name="MessagesList">
+                                    <i:Interaction.Behaviors>
+                                        <local:AutoScrollBehavior />
+                                    </i:Interaction.Behaviors>
+                                    <ListBox.ItemTemplate>
+                                        <DataTemplate DataType="{x:Type local:ChatMessage}">
+                                            <StackPanel Orientation="Vertical" Margin="0,2">
+                                                <!-- Используем AuthorBrush напрямую -->
+                                                <TextBlock FontWeight="Bold"
+                                                           Foreground="{Binding AuthorBrush}"
+                                                           Text="{Binding Author}" />
+                                                <md:MarkdownScrollViewer Markdown="{Binding Text}" />
+                                                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                                                    <TextBlock Text="{Binding Time, StringFormat='{}{0:HH:mm}'}"
+                                                               FontSize="10" Foreground="Gray"/>
+                                                    <TextBlock Text="{Binding ReceiptText}"
+                                                               FontSize="10" Foreground="Gray" Margin="5,0,0,0"/>
+                                                </StackPanel>
                                             </StackPanel>
-                                        </StackPanel>
-                                    </DataTemplate>
-                                </ListBox.ItemTemplate>
-
-                                <ListBox.Resources>
-                                    <Style TargetType="ListBox">
-                                        <EventSetter Event="Loaded" Handler="MessagesList_Loaded"/>
-                                    </Style>
-                                </ListBox.Resources>
-                            </ListBox>
-                        </ScrollViewer>
+                                        </DataTemplate>
+                                    </ListBox.ItemTemplate>
+                                </ListBox>
+                            </ScrollViewer>
+                        </DockPanel>
                     </DataTemplate>
                 </TabControl.ContentTemplate>
             </TabControl>
 
-            <!-- Поле ввода -->
             <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="5">
-                <TextBox x:Name="MessageTextBox" Width="400" Margin="0,0,5,0" KeyDown="MessageTextBox_KeyDown"/>
+                <TextBox x:Name="MessageTextBox" Width="400" Margin="0,0,5,0" 
+                         KeyDown="MessageTextBox_KeyDown" TextChanged="MessageTextBox_TextChanged"/>
                 <Button Content="Отправить" Click="SendMessage_Click" Width="100"/>
             </StackPanel>
         </Grid>

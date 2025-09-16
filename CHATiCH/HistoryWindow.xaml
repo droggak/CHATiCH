@@ -9,10 +9,11 @@
         </Grid.ColumnDefinitions>
 
         <!-- Список дат -->
-        <ListBox x:Name="DatesList"
-                 Grid.Column="0"
-                 SelectionChanged="DatesList_SelectionChanged"
-                 Margin="5"/>
+        <DockPanel Grid.Column="0" Margin="5">
+            <Button DockPanel.Dock="Bottom" Content="Export" Click="Export_Click" Margin="0,5,0,0"/>
+            <ListBox x:Name="DatesList"
+                     SelectionChanged="DatesList_SelectionChanged"/>
+        </DockPanel>
 
         <!-- Сообщения -->
         <ListBox Grid.Column="1"

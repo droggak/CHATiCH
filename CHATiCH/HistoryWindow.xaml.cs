@@ -1,59 +1,72 @@
 ﻿using System;
 using System.Collections.ObjectModel;
+using System.IO;
+using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
+using iText.Kernel.Pdf;
+using iText.Layout;
+using iText.Layout.Element;
 
 namespace CHATiCH
 {
     public partial class HistoryWindow : Window
     {
-        private readonly string _jid;
-
-        public ObservableCollection<ChatMessage> Messages { get; set; } = new ObservableCollection<ChatMessage>();
+        public string Jid { get; }
+        public ObservableCollection<ChatMessage> Messages { get; } = new ObservableCollection<ChatMessage>();
 
         public HistoryWindow(string jid)
         {
             InitializeComponent();
-            _jid = jid;
-
+            Jid = jid;
             DataContext = this;
-
-            LoadAvailableDates();
+            LoadDates();
         }
 
-        private void LoadAvailableDates()
+        private void LoadDates()
         {
-            try
-            {
-                var dates = HistoryManager.GetAvailableDates(_jid);
-                DatesList.ItemsSource = dates;
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show($"Ошибка при загрузке списка дат: {ex.Message}",
-                    "Ошибка", MessageBoxButton.OK, MessageBoxImage.Error);
-            }
+            var dates = HistoryManager.GetAvailableDates(Jid);
+            DatesList.ItemsSource = dates;
         }
 
         private void DatesList_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {
-            if (DatesList.SelectedItem is string dateStr)
+            if (DatesList.SelectedItem is string dateStr && DateTime.TryParse(dateStr, out var date))
             {
-                try
+                Messages.Clear();
+                var hist = HistoryManager.LoadHistory(Jid, date);
+                foreach (var msg in hist) Messages.Add(msg);
+            }
+        }
+
+        private void Export_Click(object sender, RoutedEventArgs e)
+        {
+            var dialog = new Microsoft.Win32.SaveFileDialog
+            {
+                Filter = "Text file (*.txt)|*.txt|PDF file (*.pdf)|*.pdf"
+            };
+            if (dialog.ShowDialog() == true)
+            {
+                if (dialog.FileName.EndsWith(".txt"))
                 {
-                    if (DateTime.TryParse(dateStr, out var date))
+                    string content = string.Join("\n", Messages.Select(m => m.ToString()));
+                    File.WriteAllText(dialog.FileName, content);
+                }
+                else if (dialog.FileName.EndsWith(".pdf"))
+                {
+                    using (var writer = new PdfWriter(dialog.FileName))
                     {
-                        Messages.Clear();
-                        var history = HistoryManager.LoadHistory(_jid, date);
-                        foreach (var msg in history)
-                            Messages.Add(msg);
+                        using (var pdf = new PdfDocument(writer))
+                        {
+                            var doc = new Document(pdf);
+                            foreach (var msg in Messages)
+                            {
+                                doc.Add(new Paragraph(msg.ToString()));
+                            }
+                        }
                     }
                 }
-                catch (Exception ex)
-                {
-                    MessageBox.Show($"Ошибка при загрузке истории: {ex.Message}",
-                        "Ошибка", MessageBoxButton.OK, MessageBoxImage.Error);
-                }
+                MessageBox.Show("Экспорт завершён!", "Успех", MessageBoxButton.OK, MessageBoxImage.Information);
             }
         }
     }
