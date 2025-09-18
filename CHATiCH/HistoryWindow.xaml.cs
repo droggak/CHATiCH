@@ -4,16 +4,19 @@ using System.IO;
 using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
+using Microsoft.Win32;
 using iText.Kernel.Pdf;
 using iText.Layout;
 using iText.Layout.Element;
+using iText.Bouncycastleconnector;
+using iText.Bouncycastle;
 
 namespace CHATiCH
 {
     public partial class HistoryWindow : Window
     {
-        public string Jid { get; }
-        public ObservableCollection<ChatMessage> Messages { get; } = new ObservableCollection<ChatMessage>();
+        public string Jid { get; set; }
+        public ObservableCollection<ChatMessage> Messages { get; set; } = new ObservableCollection<ChatMessage>();
 
         public HistoryWindow(string jid)
         {
@@ -31,7 +34,7 @@ namespace CHATiCH
 
         private void DatesList_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {
-            if (DatesList.SelectedItem is string dateStr && DateTime.TryParse(dateStr, out var date))
+            if (DatesList.SelectedItem is string dateStr && DateTime.TryParse(dateStr, out DateTime date))
             {
                 Messages.Clear();
                 var hist = HistoryManager.LoadHistory(Jid, date);
@@ -45,29 +48,32 @@ namespace CHATiCH
             {
                 Filter = "Text file (*.txt)|*.txt|PDF file (*.pdf)|*.pdf"
             };
+
             if (dialog.ShowDialog() == true)
             {
                 if (dialog.FileName.EndsWith(".txt"))
                 {
+                    // Экспорт в текстовый файл
                     string content = string.Join("\n", Messages.Select(m => m.ToString()));
                     File.WriteAllText(dialog.FileName, content);
                 }
                 else if (dialog.FileName.EndsWith(".pdf"))
                 {
+                    // Экспорт в PDF (iText7)
                     using (var writer = new PdfWriter(dialog.FileName))
+                    using (var pdf = new PdfDocument(writer))
+                    using (var doc = new Document(pdf))
                     {
-                        using (var pdf = new PdfDocument(writer))
+                        foreach (var msg in Messages)
                         {
-                            var doc = new Document(pdf);
-                            foreach (var msg in Messages)
-                            {
-                                doc.Add(new Paragraph(msg.ToString()));
-                            }
+                            doc.Add(new Paragraph(msg.ToString()));
                         }
                     }
                 }
+
                 MessageBox.Show("Экспорт завершён!", "Успех", MessageBoxButton.OK, MessageBoxImage.Information);
             }
         }
+
     }
 }

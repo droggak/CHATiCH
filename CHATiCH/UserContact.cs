@@ -40,22 +40,16 @@ namespace CHATiCH
             }
         }
 
-        // === Новый код ===
         public Brush StatusBrush
         {
             get
             {
-                switch (Availability)
-                {
-                    case Availability.Online:
-                        return Brushes.Green;
-                    case Availability.Away:
-                        return Brushes.Orange;
-                    case Availability.Offline:
-                        return Brushes.Gray;
-                    default:
-                        return Brushes.Gray;
-                }
+                if (Availability == Availability.Online)
+                    return Brushes.Green;
+                else if (Availability == Availability.Away)
+                    return Brushes.Green;
+                else
+                    return Brushes.Gray;
             }
         }
 

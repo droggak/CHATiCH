@@ -2,7 +2,9 @@
 using S22.Xmpp.Client;
 using S22.Xmpp.Im;
 using System;
+using System.Collections.Specialized;
 using System.Collections.ObjectModel;
+using System.ComponentModel;
 using System.Drawing;
 using System.IO;
 using System.Linq;
@@ -12,9 +14,6 @@ using System.Windows.Data;
 using System.Windows.Input;
 using System.Windows.Threading;
 using Hardcodet.Wpf.TaskbarNotification;
-using System.Xml.Linq;
-using System.Xml;
-using System.ComponentModel;
 using Newtonsoft.Json;
 
 namespace CHATiCH
@@ -34,6 +33,7 @@ namespace CHATiCH
 
         private const string MetaPrefixId = "##id:";
         private const string MetaPrefixReceipt = "##receipt:";
+        private const string MetaPrefixState = "##state:";
         private const string MetaEscape = "##escape##";
 
         private TaskbarIcon _trayIcon;
@@ -88,7 +88,7 @@ namespace CHATiCH
             _trayIcon.TrayBalloonTipClicked += (s, e) => Activate();
         }
 
-        private void ChatWindow_Closing(object sender, System.ComponentModel.CancelEventArgs e)
+        private void ChatWindow_Closing(object sender, CancelEventArgs e)
         {
             _trayIcon?.Dispose();
             try
@@ -151,7 +151,8 @@ namespace CHATiCH
                 {
                     foreach (var item in roster)
                     {
-                        var bareJid = GetBareJid(item.Jid);
+                        var bareJid = item.Jid.Node + "@" + item.Jid.Domain; // Fix
+
                         var contact = Contacts.FirstOrDefault(c => c.Jid == bareJid);
                         if (contact == null)
                         {
@@ -188,7 +189,8 @@ namespace CHATiCH
                 {
                     foreach (var item in roster)
                     {
-                        var bareJid = GetBareJid(item.Jid);
+                        var bareJid = item.Jid.Node + "@" + item.Jid.Domain; // Fix
+
                         if (!Contacts.Any(c => c.Jid == bareJid))
                         {
                             Contacts.Add(new UserContact
@@ -208,19 +210,16 @@ namespace CHATiCH
             }
         }
 
-        private void OnStatusChanged(object sender, EventArgs e)
+        private void OnStatusChanged(object sender, StatusEventArgs e)
         {
             Dispatcher.Invoke(() =>
             {
-                if (e is StatusEventArgs args)
+                var bareJid = e.Jid.Node + "@" + e.Jid.Domain; // Fix
+                var contact = Contacts.FirstOrDefault(c => c.Jid == bareJid);
+                if (contact != null)
                 {
-                    var bareJid = GetBareJid(args.Jid);
-                    var contact = Contacts.FirstOrDefault(c => c.Jid == bareJid);
-                    if (contact != null)
-                    {
-                        contact.Availability = args.Status.Availability;
-                        contact.StatusText = args.Status.Message ?? "Неизвестен";
-                    }
+                    contact.Availability = e.Status.Availability;
+                    contact.StatusText = e.Status.Message ?? "Неизвестен";
                 }
             });
         }
@@ -232,7 +231,7 @@ namespace CHATiCH
             Dispatcher.Invoke(() =>
             {
                 string body = e.Message?.Body ?? string.Empty;
-                string bareJid = GetBareJid(e.Jid);
+                string bareJid = e.Jid.Node + "@" + e.Jid.Domain; // Fix
 
                 if (string.IsNullOrWhiteSpace(body))
                     return;
@@ -273,21 +272,12 @@ namespace CHATiCH
                     var chatTab = ChatTabsItems.FirstOrDefault(t => t.Jid == bareJid);
                     if (chatTab != null)
                     {
-                        switch (state)
-                        {
-                            case "composing":
-                                chatTab.TypingText = $"{bareJid} печатает...";
-                                break;
-                            case "paused":
-                                chatTab.TypingText = "";
-                                break;
-                            case "active":
-                                chatTab.TypingText = "";
-                                break;
-                            default:
-                                chatTab.TypingText = "";
-                                break;
-                        }
+                        if (state == "composing")
+                            chatTab.TypingText = $"{bareJid} печатает...";
+                        else if (state == "paused" || state == "active")
+                            chatTab.TypingText = "";
+                        else
+                            chatTab.TypingText = "";
                     }
 
                     return;
@@ -360,7 +350,7 @@ namespace CHATiCH
                 {
                     string text = MessageTextBox.Text;
                     string msgId = Guid.NewGuid().ToString("N");
-                    string payload = $"{MetaPrefixId}{msgId}##" + (text.StartsWith("##") ? MetaEscape + text : text);
+                    string payload = MetaPrefixId + msgId + "##" + (text.StartsWith("##") ? MetaEscape + text : text);
 
                     _client.SendMessage(new Jid(chatTab.Jid), payload);
 
@@ -427,7 +417,7 @@ namespace CHATiCH
 
         private void SendChatState(string jid, string state)
         {
-            string payload = $"##state:{state}##";
+            string payload = "##state:" + state + "##";
             _client.SendMessage(new Jid(jid), payload);
         }
 
@@ -450,7 +440,7 @@ namespace CHATiCH
             }
         }
 
-        private string GetBareJid(Jid jid) => $"{jid.Node}@{jid.Domain}";
+        private string GetBareJid(Jid jid) => jid.Node + "@" + jid.Domain; // Fix
 
         private void CloseTab(ChatTab tab)
         {
@@ -502,7 +492,7 @@ namespace CHATiCH
                         {
                             try
                             {
-                                string receiptPayload = $"{MetaPrefixReceipt}{msg.Id}##";
+                                string receiptPayload = MetaPrefixReceipt + msg.Id + "##";
                                 _client.SendMessage(new Jid(selectedTab.Jid), receiptPayload);
                             }
                             catch (Exception ex)
@@ -566,12 +556,33 @@ namespace CHATiCH
         }
     }
 
-    public class ChatTab
+    public class ChatTab : INotifyPropertyChanged
     {
         public string Header { get; set; }
         public object Content { get; set; }
         public string Jid { get; set; }
-        public string TypingText { get; set; } = "";
+
+        private string _typingText = "";
+        public string TypingText
+        {
+            get { return _typingText; }
+            set
+            {
+                if (_typingText != value)
+                {
+                    _typingText = value;
+                    OnPropertyChanged(nameof(TypingText));
+                }
+            }
+        }
+
+        public event PropertyChangedEventHandler PropertyChanged;
+        protected void OnPropertyChanged(string name)
+        {
+            var handler = PropertyChanged;
+            if (handler != null)
+                handler(this, new PropertyChangedEventArgs(name));
+        }
     }
 
     public class RelayCommand<T> : ICommand

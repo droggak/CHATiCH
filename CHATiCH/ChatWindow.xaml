@@ -28,18 +28,9 @@
                          LostFocus="StatusMessageBox_LostFocus"/>
                 <Label x:Name="label" Content="Поиск" Width="46" VerticalContentAlignment="Stretch" HorizontalAlignment="Left"/>
                 <TextBox x:Name="SearchTextBox" TextChanged="SearchTextBox_TextChanged" 
-                         RenderTransformOrigin="0.5,0.5" 
                          Width="210" 
-                         Height="19" HorizontalAlignment="Left" >
-                    <TextBox.RenderTransform>
-                        <TransformGroup>
-                            <ScaleTransform ScaleX="-1" ScaleY="-1"/>
-                            <SkewTransform/>
-                            <RotateTransform Angle="180"/>
-                            <TranslateTransform/>
-                        </TransformGroup>
-                    </TextBox.RenderTransform>
-                </TextBox>
+                         Height="19" HorizontalAlignment="Left" />
+                <!-- Fix: удалил RenderTransform -->
             </StackPanel>
 
             <ListBox x:Name="ContactsList"
@@ -48,7 +39,6 @@
                 <ListBox.ItemTemplate>
                     <DataTemplate>
                         <StackPanel Orientation="Horizontal">
-                            <!-- Используем StatusBrush напрямую -->
                             <Ellipse Width="10" Height="10" Margin="0,0,5,0"
                                      Fill="{Binding StatusBrush}"/>
                             <TextBlock Text="{Binding Name}"/>
@@ -104,7 +94,6 @@
                                     <ListBox.ItemTemplate>
                                         <DataTemplate DataType="{x:Type local:ChatMessage}">
                                             <StackPanel Orientation="Vertical" Margin="0,2">
-                                                <!-- Используем AuthorBrush напрямую -->
                                                 <TextBlock FontWeight="Bold"
                                                            Foreground="{Binding AuthorBrush}"
                                                            Text="{Binding Author}" />
