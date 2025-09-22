@@ -250,5 +250,11 @@
   <ItemGroup>
     <Resource Include="app.ico" />
   </ItemGroup>
+  <ItemGroup>
+    <Resource Include="paperclip.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="emoji.png" />
+  </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
 </Project>

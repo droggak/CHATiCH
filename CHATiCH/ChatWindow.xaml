@@ -5,9 +5,27 @@
         xmlns:i="http://schemas.microsoft.com/xaml/behaviors"
         xmlns:md="clr-namespace:MdXaml;assembly=MdXaml"
         Title="Чат" Height="600" Width="900">
+
     <Window.Resources>
-        <!-- Конвертеры больше не нужны -->
+        <!-- Стиль для MarkdownScrollViewer -->
+        <Style x:Key="MarkdownStyle" TargetType="md:MarkdownScrollViewer">
+            <Style.Resources>
+                <Style TargetType="Image">
+                    <Setter Property="Width" Value="30"/>
+                    <Setter Property="Height" Value="30"/>
+                </Style>
+            </Style.Resources>
+        </Style>
+
+        <!-- Стиль для контекстного меню -->
+        <Style x:Key="NoHoverMenuStyle" TargetType="ContextMenu">
+            <Setter Property="OverridesDefaultStyle" Value="True"/>
+            <Setter Property="Background" Value="White"/>
+            <Setter Property="BorderThickness" Value="0"/>
+        </Style>
     </Window.Resources>
+
+
 
     <Grid>
         <Grid.ColumnDefinitions>
@@ -22,20 +40,21 @@
                     <ComboBoxItem Content="Онлайн" Tag="Online"/>
                     <ComboBoxItem Content="Отошел" Tag="Away"/>
                 </ComboBox>
+
                 <TextBox x:Name="StatusMessageBox"
-                         Margin="0,5,0,0"
-                         Text="Online via WPF"
-                         LostFocus="StatusMessageBox_LostFocus"/>
+         Margin="0,5,0,0"
+         Text="Online via WPF"
+         LostFocus="StatusMessageBox_LostFocus"/>
+
                 <Label x:Name="label" Content="Поиск" Width="46" VerticalContentAlignment="Stretch" HorizontalAlignment="Left"/>
                 <TextBox x:Name="SearchTextBox" TextChanged="SearchTextBox_TextChanged" 
                          Width="210" 
                          Height="19" HorizontalAlignment="Left" />
-                <!-- Fix: удалил RenderTransform -->
             </StackPanel>
 
             <ListBox x:Name="ContactsList"
                      ItemsSource="{Binding Contacts}"
-                     MouseDoubleClick="ContactsList_MouseDoubleClick">
+                     MouseDoubleClick="ContactsList_MouseDoubleClick" SelectionChanged="ContactsList_SelectionChanged">
                 <ListBox.ItemTemplate>
                     <DataTemplate>
                         <StackPanel Orientation="Horizontal">
@@ -70,10 +89,7 @@
                             <TextBlock Text="{Binding Header}" Margin="0,0,5,0"/>
                             <Button Content="x"
                                     Command="{Binding DataContext.CloseTabCommand, RelativeSource={RelativeSource AncestorType=Window}}"
-                                    CommandParameter="{Binding}"
-                                    Padding="0"
-                                    Width="16" Height="16"
-                                    Margin="5,0,0,0"/>
+                                    CommandParameter="{Binding}"/>
                         </StackPanel>
                     </DataTemplate>
                 </TabControl.ItemTemplate>
@@ -97,7 +113,18 @@
                                                 <TextBlock FontWeight="Bold"
                                                            Foreground="{Binding AuthorBrush}"
                                                            Text="{Binding Author}" />
-                                                <md:MarkdownScrollViewer Markdown="{Binding Text}" />
+                                                <md:MarkdownScrollViewer Markdown="{Binding Text}">
+                                                    <md:MarkdownScrollViewer.Resources>
+                                                        <Style TargetType="Image">
+                                                            <Setter Property="Width" Value="20"/>
+                                                            <Setter Property="Height" Value="20"/>
+                                                        </Style>
+                                                    </md:MarkdownScrollViewer.Resources>
+                                                </md:MarkdownScrollViewer>
+
+
+
+
                                                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
                                                     <TextBlock Text="{Binding Time, StringFormat='{}{0:HH:mm}'}"
                                                                FontSize="10" Foreground="Gray"/>
@@ -115,9 +142,20 @@
             </TabControl>
 
             <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="5">
-                <TextBox x:Name="MessageTextBox" Width="400" Margin="0,0,5,0" 
-                         KeyDown="MessageTextBox_KeyDown" TextChanged="MessageTextBox_TextChanged"/>
-                <Button Content="Отправить" Click="SendMessage_Click" Width="100"/>
+                <Button x:Name="file_btn" Background="{x:Null}" Width="25" Height="25" Margin="5" BorderThickness="0">
+                    <Image Source="paperclip.png" Width="25" Height="25" Margin="0,0,-2,-2" />
+                </Button>
+                <Button x:Name="emoji_btn" Background="{x:Null}" Width="25" Height="25" Margin="5" BorderThickness="0" Click="EmojiBtn_Click">
+                    <Image Source="emoji.png" Width="25" Height="25" Margin="0,0,-2,-2" Stretch="Fill" />
+                </Button>
+                <RichTextBox x:Name="MessageRichBox"
+                             AcceptsReturn="True"
+                             VerticalScrollBarVisibility="Auto"
+                             Margin="0,0,5,0"
+                             KeyDown="MessageRichBox_KeyDown"
+                             TextChanged="MessageRichBox_TextChanged"
+                             Width="482" />
+                <Button Content="Отправить" Click="SendMessage_Click" Width="100" Height="25" Margin="0,0,0,-2"/>
             </StackPanel>
         </Grid>
     </Grid>

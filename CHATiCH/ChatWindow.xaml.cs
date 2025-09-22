@@ -1,20 +1,23 @@
-﻿using S22.Xmpp;
-using S22.Xmpp.Client;
-using S22.Xmpp.Im;
-using System;
-using System.Collections.Specialized;
+﻿using System;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
-using System.Drawing;
+using System.Windows.Media;
 using System.IO;
 using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Data;
 using System.Windows.Input;
+using System.Windows.Media.Imaging;
+using System.Windows.Documents; // Добавлен для RichTextBox и InlineUIContainer
 using System.Windows.Threading;
 using Hardcodet.Wpf.TaskbarNotification;
+using S22.Xmpp;
+using S22.Xmpp.Client;
+using S22.Xmpp.Im;
 using Newtonsoft.Json;
+using System.Globalization;
+using System.Windows.Controls.Primitives;
 
 namespace CHATiCH
 {
@@ -25,7 +28,7 @@ namespace CHATiCH
         private DispatcherTimer _saveDebounceTimer;
         private DateTime _lastActivityTime;
         private bool _manualStatusSet = false;
-
+        public Uri BaseUri { get; } = new Uri(AppDomain.CurrentDomain.BaseDirectory);
         public ObservableCollection<UserContact> Contacts { get; set; } = new ObservableCollection<UserContact>();
         public ObservableCollection<ChatTab> ChatTabsItems { get; set; } = new ObservableCollection<ChatTab>();
 
@@ -53,7 +56,7 @@ namespace CHATiCH
             ChatTabs.ItemsSource = ChatTabsItems;
 
             CloseTabCommand = new RelayCommand<ChatTab>(CloseTab);
-
+            emoji_btn.Click += EmojiBtn_Click;
             LoadRoster();
 
             _client.StatusChanged += OnStatusChanged;
@@ -81,13 +84,102 @@ namespace CHATiCH
 
             _trayIcon = new TaskbarIcon
             {
-                Icon = new Icon("app.ico"),
+                Icon = new System.Drawing.Icon("app.ico"), // Fix: полный путь для Icon
                 ToolTipText = "CHATiCH",
                 Visibility = Visibility.Visible
             };
             _trayIcon.TrayBalloonTipClicked += (s, e) => Activate();
         }
+        private void EmojiBtn_Click(object sender, RoutedEventArgs e)
+        {
+            string emojiDir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Emoji");
+            if (!Directory.Exists(emojiDir)) return;
 
+            var files = Directory.GetFiles(emojiDir, "*.png");
+            if (files.Length == 0) return;
+
+            var menu = new ContextMenu
+            {
+                Background = Brushes.White,
+                BorderThickness = new Thickness(0)
+            };
+
+            var grid = new UniformGrid
+            {
+                Columns = 8,
+            };
+
+            foreach (var file in files)
+            {
+                var img = new Image
+                {
+                    Source = new BitmapImage(new Uri(file)),
+                    Width = 25,
+                    Height = 25,
+                    Margin = new Thickness(2),
+                    Cursor = Cursors.Hand // курсор “палец”
+                };
+
+                img.MouseLeftButtonDown += (s, ev) =>
+                {
+                    var emojiImage = new Image
+                    {
+                        Source = new BitmapImage(new Uri(file)),
+                        Width = 20, // размер в чате
+                        Height = 20,
+                        Tag = Path.GetFileName(file)
+                    };
+                    var container = new InlineUIContainer(emojiImage, MessageRichBox.CaretPosition);
+                    MessageRichBox.CaretPosition = container.ElementEnd;
+                    MessageRichBox.Focus();
+                    menu.IsOpen = false;
+                };
+
+                grid.Children.Add(img);
+            }
+
+            // помещаем сетку в один MenuItem без выделения
+            var wrapperItem = new MenuItem
+            {
+                Header = grid,
+                StaysOpenOnClick = true,
+                Focusable = false,
+                Background = Brushes.Transparent
+            };
+
+            menu.Items.Add(wrapperItem);
+
+            menu.PlacementTarget = emoji_btn;
+            menu.Placement = System.Windows.Controls.Primitives.PlacementMode.Bottom;
+            menu.IsOpen = true;
+        }
+
+
+
+
+
+
+
+
+        // Метод для вставки эмодзи в RichTextBox как изображения
+        private void EmojiItem_Click(object sender, RoutedEventArgs e)
+        {
+            var item = sender as MenuItem;
+            var file = item.Tag as string;
+
+            if (file != null)
+            {
+                var image = new Image
+                {
+                    Source = new BitmapImage(new Uri(file)),
+                    Width = 20, // Размер в поле ввода
+                    Height = 20
+                };
+
+                var container = new InlineUIContainer(image, MessageRichBox.CaretPosition);
+                MessageRichBox.Focus();
+            }
+        }
         private void ChatWindow_Closing(object sender, CancelEventArgs e)
         {
             _trayIcon?.Dispose();
@@ -344,13 +436,14 @@ namespace CHATiCH
             }
 
             var messages = chatTab.Content as ObservableCollection<ChatMessage>;
-            if (messages != null && !string.IsNullOrWhiteSpace(MessageTextBox.Text))
+            string markdownText = GetMarkdownFromRichTextBox();
+
+            if (messages != null && !string.IsNullOrWhiteSpace(markdownText))
             {
                 try
                 {
-                    string text = MessageTextBox.Text;
                     string msgId = Guid.NewGuid().ToString("N");
-                    string payload = MetaPrefixId + msgId + "##" + (text.StartsWith("##") ? MetaEscape + text : text);
+                    string payload = MetaPrefixId + msgId + "##" + (markdownText.StartsWith("##") ? MetaEscape + markdownText : markdownText);
 
                     _client.SendMessage(new Jid(chatTab.Jid), payload);
 
@@ -358,7 +451,7 @@ namespace CHATiCH
                     {
                         Id = msgId,
                         Author = "Я",
-                        Text = text,
+                        Text = markdownText,
                         Time = DateTime.Now,
                         IsIncoming = false,
                         Status = MessageStatus.Sent
@@ -366,7 +459,7 @@ namespace CHATiCH
                     messages.Add(myMsg);
                     ScheduleSave(chatTab.Jid, messages);
 
-                    MessageTextBox.Clear();
+                    MessageRichBox.Document.Blocks.Clear();
                     SendChatState(chatTab.Jid, "active");
                 }
                 catch (Exception ex)
@@ -375,20 +468,52 @@ namespace CHATiCH
                 }
             }
         }
-
-        private void MessageTextBox_KeyDown(object sender, KeyEventArgs e)
+        private string GetMarkdownFromRichTextBox()
         {
-            if (e.Key == Key.Enter)
-                SendMessage_Click(sender, new RoutedEventArgs());
+            var markdown = new System.Text.StringBuilder();
+            foreach (var block in MessageRichBox.Document.Blocks)
+            {
+                if (block is Paragraph paragraph)
+                {
+                    foreach (var inline in paragraph.Inlines)
+                    {
+                        if (inline is InlineUIContainer container && container.Child is Image image)
+                        {
+                            var filename = image.Tag as string;
+                            if (filename != null)
+                            {
+                                // вставляем эмодзи как тег <img> с фиксированным размером
+                                markdown.Append($"![](Emoji/{filename})");
+                            }
+                        }
+                        else if (inline is Run run)
+                        {
+                            markdown.Append(run.Text);
+                        }
+                    }
+                }
+            }
+            return markdown.ToString().Trim();
         }
 
-        private void MessageTextBox_TextChanged(object sender, TextChangedEventArgs e)
+
+        private void MessageRichBox_KeyDown(object sender, KeyEventArgs e)
+        {
+            if (e.Key == Key.Enter && !Keyboard.Modifiers.HasFlag(ModifierKeys.Shift))
+            {
+                SendMessage_Click(sender, new RoutedEventArgs());
+                e.Handled = true;
+            }
+        }
+
+        private void MessageRichBox_TextChanged(object sender, TextChangedEventArgs e)
         {
             var chatTab = ChatTabs.SelectedItem as ChatTab;
             if (chatTab != null)
             {
                 var jid = chatTab.Jid;
-                if (!string.IsNullOrEmpty(MessageTextBox.Text))
+                var text = new TextRange(MessageRichBox.Document.ContentStart, MessageRichBox.Document.ContentEnd).Text.Trim();
+                if (!string.IsNullOrEmpty(text))
                 {
                     SendChatState(jid, "composing");
 
@@ -554,6 +679,11 @@ namespace CHATiCH
                 return false;
             };
         }
+
+        private void ContactsList_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+
+        }
     }
 
     public class ChatTab : INotifyPropertyChanged
@@ -605,7 +735,18 @@ namespace CHATiCH
             remove { CommandManager.RequerySuggested -= value; }
         }
     }
+    public class RelativePathToUriConverter : IValueConverter
+    {
+        public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
+        {
+            return new Uri(AppDomain.CurrentDomain.BaseDirectory); // Base dir for Emoji/
+        }
 
+        public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
+        {
+            throw new NotImplementedException();
+        }
+    }
     public static class StringExtensions
     {
         public static string Truncate(this string value, int maxLength)
