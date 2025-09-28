@@ -18,6 +18,10 @@ using S22.Xmpp.Im;
 using Newtonsoft.Json;
 using System.Globalization;
 using System.Windows.Controls.Primitives;
+using System.Threading.Tasks;
+using MdXaml;
+
+
 
 namespace CHATiCH
 {
@@ -28,6 +32,9 @@ namespace CHATiCH
         private DispatcherTimer _saveDebounceTimer;
         private DateTime _lastActivityTime;
         private bool _manualStatusSet = false;
+        private string _uploadedFileName = null;
+
+
         public Uri BaseUri { get; } = new Uri(AppDomain.CurrentDomain.BaseDirectory);
         public ObservableCollection<UserContact> Contacts { get; set; } = new ObservableCollection<UserContact>();
         public ObservableCollection<ChatTab> ChatTabsItems { get; set; } = new ObservableCollection<ChatTab>();
@@ -49,6 +56,10 @@ namespace CHATiCH
         public ChatWindow(XmppClient client)
         {
             InitializeComponent();
+            // Ловим клики по Hyperlink внутри MarkdownScrollViewer
+            EventManager.RegisterClassHandler(typeof(System.Windows.Documents.Hyperlink),
+                System.Windows.Documents.Hyperlink.RequestNavigateEvent,
+                new System.Windows.Navigation.RequestNavigateEventHandler(Hyperlink_RequestNavigate));
             _client = client;
             DataContext = this;
 
@@ -58,6 +69,7 @@ namespace CHATiCH
             CloseTabCommand = new RelayCommand<ChatTab>(CloseTab);
             emoji_btn.Click += EmojiBtn_Click;
             LoadRoster();
+            file_btn.Click += FileBtn_Click;
 
             _client.StatusChanged += OnStatusChanged;
             _client.Message += OnMessageReceived;
@@ -154,6 +166,93 @@ namespace CHATiCH
             menu.IsOpen = true;
         }
 
+
+
+
+        private async void FileBtn_Click(object sender, RoutedEventArgs e)
+        {
+            var chatTab = ChatTabs.SelectedItem as ChatTab;
+            if (chatTab == null)
+            {
+                MessageBox.Show("Выберите чат перед отправкой файла!", "Ошибка", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+
+            var openFileDialog = new Microsoft.Win32.OpenFileDialog();
+            if (openFileDialog.ShowDialog() != true)
+                return;
+
+            string filePath = openFileDialog.FileName;
+
+            try
+            {
+                FileUploadProgressBar.Visibility = Visibility.Visible;
+                var progress = new Progress<double>(p => FileUploadProgressBar.Value = p);
+
+                _uploadedFileName = await UploadFileAsync(filePath, progress);
+
+                FileUploadProgressBar.Visibility = Visibility.Collapsed;
+                SelectedFileText.Text = System.IO.Path.GetFileName(filePath);
+            }
+            catch (Exception ex)
+            {
+                FileUploadProgressBar.Visibility = Visibility.Collapsed;
+                MessageBox.Show("Ошибка при загрузке файла: " + ex.Message, "Ошибка", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+
+
+        private async Task<string> UploadFileAsync(string filePath, IProgress<double> progress)
+        {
+            string serverUrl = "http://win-m4f2mfrj6i4.vkr.loc/fileschat/UploadFileHandler.ashx";
+
+            using (var fs = System.IO.File.OpenRead(filePath))
+            using (var client = new System.Net.Http.HttpClient())
+            {
+                var totalBytes = fs.Length;
+                var buffer = new byte[81920];
+                int bytesRead;
+                long uploaded = 0;
+                var ms = new System.IO.MemoryStream();
+
+                while ((bytesRead = await fs.ReadAsync(buffer, 0, buffer.Length)) > 0)
+                {
+                    ms.Write(buffer, 0, bytesRead);
+                    uploaded += bytesRead;
+                    progress.Report(uploaded * 100.0 / totalBytes);
+                }
+
+                ms.Position = 0;
+
+                using (var content = new System.Net.Http.MultipartFormDataContent())
+                {
+                    var streamContent = new System.Net.Http.StreamContent(ms);
+                    content.Add(streamContent, "file", System.IO.Path.GetFileName(filePath));
+
+                    var response = await client.PostAsync(serverUrl, content);
+                    response.EnsureSuccessStatusCode();
+
+                    return await response.Content.ReadAsStringAsync();
+                }
+            }
+        }
+
+        private void Hyperlink_RequestNavigate(object sender, System.Windows.Navigation.RequestNavigateEventArgs e)
+        {
+            try
+            {
+                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(e.Uri.AbsoluteUri)
+                {
+                    UseShellExecute = true
+                });
+                e.Handled = true;
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show("Не удалось открыть ссылку: " + ex.Message, "Ошибка",
+                    MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
 
 
 
@@ -423,6 +522,7 @@ namespace CHATiCH
                 }
             });
         }
+        
 
         private void SendMessage_Click(object sender, RoutedEventArgs e)
         {
@@ -437,6 +537,21 @@ namespace CHATiCH
 
             var messages = chatTab.Content as ObservableCollection<ChatMessage>;
             string markdownText = GetMarkdownFromRichTextBox();
+
+            if (!string.IsNullOrEmpty(_uploadedFileName))
+            {
+                string fileUrl = "http://win-m4f2mfrj6i4.vkr.loc/fileschat/files/" + _uploadedFileName;
+                string fileName = SelectedFileText.Text;
+
+                // Markdown-ссылка
+                markdownText = $"[{fileName}]({fileUrl})" + (string.IsNullOrEmpty(markdownText) ? "" : "\n" + markdownText);
+
+                SelectedFileText.Text = "";
+                _uploadedFileName = null;
+            }
+
+
+
 
             if (messages != null && !string.IsNullOrWhiteSpace(markdownText))
             {
@@ -456,6 +571,7 @@ namespace CHATiCH
                         IsIncoming = false,
                         Status = MessageStatus.Sent
                     };
+                    Console.WriteLine(markdownText);
                     messages.Add(myMsg);
                     ScheduleSave(chatTab.Jid, messages);
 

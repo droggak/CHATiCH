@@ -111,8 +111,8 @@
                                         <DataTemplate DataType="{x:Type local:ChatMessage}">
                                             <StackPanel Orientation="Vertical" Margin="0,2">
                                                 <TextBlock FontWeight="Bold"
-                                                           Foreground="{Binding AuthorBrush}"
-                                                           Text="{Binding Author}" />
+                       Foreground="{Binding AuthorBrush}"
+                       Text="{Binding Author}" />
                                                 <md:MarkdownScrollViewer Markdown="{Binding Text}">
                                                     <md:MarkdownScrollViewer.Resources>
                                                         <Style TargetType="Image">
@@ -121,19 +121,16 @@
                                                         </Style>
                                                     </md:MarkdownScrollViewer.Resources>
                                                 </md:MarkdownScrollViewer>
-
-
-
-
                                                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
                                                     <TextBlock Text="{Binding Time, StringFormat='{}{0:HH:mm}'}"
-                                                               FontSize="10" Foreground="Gray"/>
+                           FontSize="10" Foreground="Gray"/>
                                                     <TextBlock Text="{Binding ReceiptText}"
-                                                               FontSize="10" Foreground="Gray" Margin="5,0,0,0"/>
+                           FontSize="10" Foreground="Gray" Margin="5,0,0,0"/>
                                                 </StackPanel>
                                             </StackPanel>
                                         </DataTemplate>
                                     </ListBox.ItemTemplate>
+
                                 </ListBox>
                             </ScrollViewer>
                         </DockPanel>
@@ -141,21 +138,19 @@
                 </TabControl.ContentTemplate>
             </TabControl>
 
-            <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="5">
-                <Button x:Name="file_btn" Background="{x:Null}" Width="25" Height="25" Margin="5" BorderThickness="0">
-                    <Image Source="paperclip.png" Width="25" Height="25" Margin="0,0,-2,-2" />
-                </Button>
-                <Button x:Name="emoji_btn" Background="{x:Null}" Width="25" Height="25" Margin="5" BorderThickness="0" Click="EmojiBtn_Click">
-                    <Image Source="emoji.png" Width="25" Height="25" Margin="0,0,-2,-2" Stretch="Fill" />
-                </Button>
-                <RichTextBox x:Name="MessageRichBox"
-                             AcceptsReturn="True"
-                             VerticalScrollBarVisibility="Auto"
-                             Margin="0,0,5,0"
-                             KeyDown="MessageRichBox_KeyDown"
-                             TextChanged="MessageRichBox_TextChanged"
-                             Width="482" />
-                <Button Content="Отправить" Click="SendMessage_Click" Width="100" Height="25" Margin="0,0,0,-2"/>
+            <StackPanel Grid.Row="1" Orientation="Vertical" Margin="5">
+                <TextBlock x:Name="SelectedFileText" Text="" Foreground="Blue" Margin="0,0,0,2"/>
+                <ProgressBar x:Name="FileUploadProgressBar" Minimum="0" Maximum="100" Height="5" Visibility="Collapsed"/>
+                <StackPanel Orientation="Horizontal">
+                    <Button x:Name="file_btn" Width="25" Height="25" Margin="5" BorderThickness="0">
+                        <Image Source="paperclip.png" Width="25" Height="25"/>
+                    </Button>
+                    <Button x:Name="emoji_btn" Width="25" Height="25" Margin="5" BorderThickness="0" Click="EmojiBtn_Click">
+                        <Image Source="emoji.png" Width="25" Height="25"/>
+                    </Button>
+                    <RichTextBox x:Name="MessageRichBox" AcceptsReturn="True" VerticalScrollBarVisibility="Auto" Width="482"/>
+                    <Button Content="Отправить" Click="SendMessage_Click" Width="100" Height="25" Margin="0,0,0,-2"/>
+                </StackPanel>
             </StackPanel>
         </Grid>
     </Grid>
