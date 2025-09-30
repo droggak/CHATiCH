@@ -19,7 +19,11 @@ using Newtonsoft.Json;
 using System.Globalization;
 using System.Windows.Controls.Primitives;
 using System.Threading.Tasks;
-using MdXaml;
+using System.Windows.Navigation;
+using System.Net;
+using Microsoft.Win32;
+
+
 
 
 
@@ -56,10 +60,7 @@ namespace CHATiCH
         public ChatWindow(XmppClient client)
         {
             InitializeComponent();
-            // Ловим клики по Hyperlink внутри MarkdownScrollViewer
-            EventManager.RegisterClassHandler(typeof(System.Windows.Documents.Hyperlink),
-                System.Windows.Documents.Hyperlink.RequestNavigateEvent,
-                new System.Windows.Navigation.RequestNavigateEventHandler(Hyperlink_RequestNavigate));
+            
             _client = client;
             DataContext = this;
 
@@ -166,9 +167,6 @@ namespace CHATiCH
             menu.IsOpen = true;
         }
 
-
-
-
         private async void FileBtn_Click(object sender, RoutedEventArgs e)
         {
             var chatTab = ChatTabs.SelectedItem as ChatTab;
@@ -206,14 +204,14 @@ namespace CHATiCH
         {
             string serverUrl = "http://win-m4f2mfrj6i4.vkr.loc/fileschat/UploadFileHandler.ashx";
 
-            using (var fs = System.IO.File.OpenRead(filePath))
+            using (var fs = File.OpenRead(filePath))
             using (var client = new System.Net.Http.HttpClient())
             {
                 var totalBytes = fs.Length;
                 var buffer = new byte[81920];
                 int bytesRead;
                 long uploaded = 0;
-                var ms = new System.IO.MemoryStream();
+                var ms = new MemoryStream();
 
                 while ((bytesRead = await fs.ReadAsync(buffer, 0, buffer.Length)) > 0)
                 {
@@ -227,58 +225,59 @@ namespace CHATiCH
                 using (var content = new System.Net.Http.MultipartFormDataContent())
                 {
                     var streamContent = new System.Net.Http.StreamContent(ms);
-                    content.Add(streamContent, "file", System.IO.Path.GetFileName(filePath));
+                    content.Add(streamContent, "file", Path.GetFileName(filePath));
 
                     var response = await client.PostAsync(serverUrl, content);
                     response.EnsureSuccessStatusCode();
 
-                    return await response.Content.ReadAsStringAsync();
+                    // просто читаем как строку
+                    string uploadedFileName = await response.Content.ReadAsStringAsync();
+                    return uploadedFileName.Trim(); // убираем возможные пробелы/переводы строки
                 }
             }
         }
 
-        private void Hyperlink_RequestNavigate(object sender, System.Windows.Navigation.RequestNavigateEventArgs e)
+
+        private async void Hyperlink_RequestNavigate(object sender, System.Windows.Navigation.RequestNavigateEventArgs e)
         {
             try
             {
-                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(e.Uri.AbsoluteUri)
+                string url = e.Uri.AbsoluteUri;
+                string fileName = System.IO.Path.GetFileName(url);
+
+                SaveFileDialog saveFileDialog = new SaveFileDialog
                 {
-                    UseShellExecute = true
-                });
-                e.Handled = true;
+                    FileName = fileName,
+                    Filter = "Все файлы|*.*"
+                };
+
+                if (saveFileDialog.ShowDialog() == true)
+                {
+                    using (var client = new WebClient())
+                    {
+                        await client.DownloadFileTaskAsync(new Uri(url), saveFileDialog.FileName);
+                    }
+
+                    MessageBox.Show($"Файл сохранён: {saveFileDialog.FileName}",
+                                    "Скачивание завершено",
+                                    MessageBoxButton.OK,
+                                    MessageBoxImage.Information);
+                }
             }
             catch (Exception ex)
             {
-                MessageBox.Show("Не удалось открыть ссылку: " + ex.Message, "Ошибка",
-                    MessageBoxButton.OK, MessageBoxImage.Error);
+                MessageBox.Show("Ошибка при скачивании файла: " + ex.Message,
+                                "Ошибка",
+                                MessageBoxButton.OK,
+                                MessageBoxImage.Error);
             }
+
+            e.Handled = true;
         }
 
 
 
 
-
-
-
-        // Метод для вставки эмодзи в RichTextBox как изображения
-        private void EmojiItem_Click(object sender, RoutedEventArgs e)
-        {
-            var item = sender as MenuItem;
-            var file = item.Tag as string;
-
-            if (file != null)
-            {
-                var image = new Image
-                {
-                    Source = new BitmapImage(new Uri(file)),
-                    Width = 20, // Размер в поле ввода
-                    Height = 20
-                };
-
-                var container = new InlineUIContainer(image, MessageRichBox.CaretPosition);
-                MessageRichBox.Focus();
-            }
-        }
         private void ChatWindow_Closing(object sender, CancelEventArgs e)
         {
             _trayIcon?.Dispose();
@@ -463,16 +462,19 @@ namespace CHATiCH
                     var chatTab = ChatTabsItems.FirstOrDefault(t => t.Jid == bareJid);
                     if (chatTab != null)
                     {
-                        if (state == "composing")
-                            chatTab.TypingText = $"{bareJid} печатает...";
-                        else if (state == "paused" || state == "active")
-                            chatTab.TypingText = "";
-                        else
-                            chatTab.TypingText = "";
+                        Dispatcher.Invoke(() =>
+                        {
+                            if (state == "composing")
+                                chatTab.TypingText = $"{bareJid} печатает...";
+                            else
+                                chatTab.TypingText = "";
+                        });
                     }
 
                     return;
                 }
+
+
 
                 string incomingId = null;
                 string realText = body;
@@ -522,7 +524,8 @@ namespace CHATiCH
                 }
             });
         }
-        
+       
+
 
         private void SendMessage_Click(object sender, RoutedEventArgs e)
         {
@@ -540,15 +543,33 @@ namespace CHATiCH
 
             if (!string.IsNullOrEmpty(_uploadedFileName))
             {
-                string fileUrl = "http://win-m4f2mfrj6i4.vkr.loc/fileschat/files/" + _uploadedFileName;
-                string fileName = SelectedFileText.Text;
+                // Очищаем имя файла от лишних скобок и пробелов
+                string cleanedFileName = Path.GetFileName(SelectedFileText.Text.TrimEnd(')', ' '));
+                string cleanedFileUrl = "http://win-m4f2mfrj6i4.vkr.loc/fileschat/files/" + _uploadedFileName.TrimEnd(')', ' ');
 
-                // Markdown-ссылка
-                markdownText = $"[{fileName}]({fileUrl})" + (string.IsNullOrEmpty(markdownText) ? "" : "\n" + markdownText);
+                var fileMessage = new ChatMessage
+                {
+                    Author = "Я",
+                    Time = DateTime.Now,
+                    IsIncoming = false,
+                    Status = MessageStatus.Sent,
+                    Text = $"[{cleanedFileName}]({cleanedFileUrl})", // Markdown для отображения
+                    FileName = cleanedFileName,
+                    FileUrl = cleanedFileUrl
+                };
+
+                messages.Add(fileMessage);
+
+                // Отправка через XMPP
+                string msgId = Guid.NewGuid().ToString("N");
+                string payload = MetaPrefixId + msgId + "##" + MetaEscape + fileMessage.Text;
+                _client.SendMessage(new Jid(chatTab.Jid), payload);
 
                 SelectedFileText.Text = "";
                 _uploadedFileName = null;
             }
+
+
 
 
 
@@ -629,8 +650,10 @@ namespace CHATiCH
             {
                 var jid = chatTab.Jid;
                 var text = new TextRange(MessageRichBox.Document.ContentStart, MessageRichBox.Document.ContentEnd).Text.Trim();
+
                 if (!string.IsNullOrEmpty(text))
                 {
+                    // сразу отправляем "печатает..."
                     SendChatState(jid, "composing");
 
                     if (_typingTimer == null)
@@ -655,6 +678,8 @@ namespace CHATiCH
                 }
             }
         }
+
+
 
         private void SendChatState(string jid, string state)
         {
@@ -721,30 +746,39 @@ namespace CHATiCH
             {
                 if (selectedTab.Content is ObservableCollection<ChatMessage> list)
                 {
-                    var unreadIncoming = list.Where(m => m.IsIncoming && m.Status == MessageStatus.Sent && !string.IsNullOrEmpty(m.Id)).ToArray();
+                    var unreadIncoming = list
+                        .Where(m => m.IsIncoming && m.Status == MessageStatus.Sent && !string.IsNullOrEmpty(m.Id))
+                        .ToArray();
+
                     if (unreadIncoming.Length > 0)
                     {
-                        foreach (var msg in unreadIncoming)
-                            msg.Status = MessageStatus.Read;
-
-                        ScheduleSave(selectedTab.Jid, list);
-
-                        foreach (var msg in unreadIncoming)
+                        // Автоматически помечаем как прочитанное, если окно активно
+                        if (this.IsActive)
                         {
-                            try
+                            foreach (var msg in unreadIncoming)
+                                msg.Status = MessageStatus.Read;
+
+                            ScheduleSave(selectedTab.Jid, list);
+
+                            // Отправляем receipt отправителю
+                            foreach (var msg in unreadIncoming)
                             {
-                                string receiptPayload = MetaPrefixReceipt + msg.Id + "##";
-                                _client.SendMessage(new Jid(selectedTab.Jid), receiptPayload);
-                            }
-                            catch (Exception ex)
-                            {
-                                Console.WriteLine("Ошибка отправки receipt: " + ex.Message);
+                                try
+                                {
+                                    string receiptPayload = MetaPrefixReceipt + msg.Id + "##";
+                                    _client.SendMessage(new Jid(selectedTab.Jid), receiptPayload);
+                                }
+                                catch (Exception ex)
+                                {
+                                    Console.WriteLine("Ошибка отправки receipt: " + ex.Message);
+                                }
                             }
                         }
                     }
                 }
             }
         }
+
 
         private void OpenHistory_Click(object sender, RoutedEventArgs e)
         {
@@ -797,6 +831,11 @@ namespace CHATiCH
         }
 
         private void ContactsList_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+
+        }
+
+        private void MarkdownScrollViewer_Scroll(object sender, ScrollEventArgs e)
         {
 
         }

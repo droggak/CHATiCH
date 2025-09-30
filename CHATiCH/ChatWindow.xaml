@@ -7,6 +7,12 @@
         Title="Чат" Height="600" Width="900">
 
     <Window.Resources>
+        <!-- Конвертеры -->
+        <local:LinkExtractor x:Key="LinkExtractor"/>
+        <local:LinkTextExtractor x:Key="LinkTextExtractor"/>
+        <local:IncomingMessageBrushConverter x:Key="IncomingMessageBrushConverter"/>
+
+
         <!-- Стиль для MarkdownScrollViewer -->
         <Style x:Key="MarkdownStyle" TargetType="md:MarkdownScrollViewer">
             <Style.Resources>
@@ -17,6 +23,57 @@
             </Style.Resources>
         </Style>
 
+        <!-- Сообщения-ссылки -->
+        <DataTemplate x:Key="FileLinkTemplate" DataType="{x:Type local:ChatMessage}">
+            <Border CornerRadius="10" Padding="5" Margin="3"
+            Background="{Binding IsIncoming, Converter={StaticResource IncomingMessageBrushConverter}}">
+                <StackPanel>
+                    <!-- Автор -->
+                    <TextBlock Text="{Binding Author}" FontWeight="Bold" />
+
+                    <!-- Ссылка на файл -->
+                    <TextBlock>
+                        <Hyperlink NavigateUri="{Binding FileUrl}" RequestNavigate="Hyperlink_RequestNavigate">
+                            <Run Text="{Binding FileName}" />
+                        </Hyperlink>
+
+
+                    </TextBlock>
+
+                    <!-- Время и статус прочтения -->
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                        <TextBlock Text="{Binding Time, StringFormat=HH:mm}" FontSize="10" Foreground="Gray"/>
+                        <TextBlock Text=" " />
+                        <TextBlock Text="{Binding Status}" FontSize="10" Foreground="Gray"/>
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+        </DataTemplate>
+
+
+
+        <!-- Обычные сообщения -->
+        <DataTemplate x:Key="MarkdownTemplate" DataType="{x:Type local:ChatMessage}">
+            <Border CornerRadius="10" Padding="5" Margin="3" 
+            Background="{Binding IsIncoming, Converter={StaticResource IncomingMessageBrushConverter}}">
+                <StackPanel>
+                    <TextBlock Text="{Binding Author}" FontWeight="Bold" />
+                    <md:MarkdownScrollViewer Markdown="{Binding Text}" Style="{StaticResource MarkdownStyle}" />
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                        <TextBlock Text="{Binding Time, StringFormat=HH:mm}" FontSize="10" Foreground="Gray"/>
+                        <TextBlock Text=" " />
+                        <TextBlock Text="{Binding Status}" FontSize="10" Foreground="Gray"/>
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+        </DataTemplate>
+
+
+        <!-- Подключаем селектор -->
+        <local:MessageTemplateSelector x:Key="MessageTemplateSelector"
+                                   MarkdownTemplate="{StaticResource MarkdownTemplate}"
+                                   FileLinkTemplate="{StaticResource FileLinkTemplate}" />
+
         <!-- Стиль для контекстного меню -->
         <Style x:Key="NoHoverMenuStyle" TargetType="ContextMenu">
             <Setter Property="OverridesDefaultStyle" Value="True"/>
@@ -24,6 +81,7 @@
             <Setter Property="BorderThickness" Value="0"/>
         </Style>
     </Window.Resources>
+
 
 
 
@@ -107,29 +165,11 @@
                                     <i:Interaction.Behaviors>
                                         <local:AutoScrollBehavior />
                                     </i:Interaction.Behaviors>
-                                    <ListBox.ItemTemplate>
-                                        <DataTemplate DataType="{x:Type local:ChatMessage}">
-                                            <StackPanel Orientation="Vertical" Margin="0,2">
-                                                <TextBlock FontWeight="Bold"
-                       Foreground="{Binding AuthorBrush}"
-                       Text="{Binding Author}" />
-                                                <md:MarkdownScrollViewer Markdown="{Binding Text}">
-                                                    <md:MarkdownScrollViewer.Resources>
-                                                        <Style TargetType="Image">
-                                                            <Setter Property="Width" Value="20"/>
-                                                            <Setter Property="Height" Value="20"/>
-                                                        </Style>
-                                                    </md:MarkdownScrollViewer.Resources>
-                                                </md:MarkdownScrollViewer>
-                                                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
-                                                    <TextBlock Text="{Binding Time, StringFormat='{}{0:HH:mm}'}"
-                           FontSize="10" Foreground="Gray"/>
-                                                    <TextBlock Text="{Binding ReceiptText}"
-                           FontSize="10" Foreground="Gray" Margin="5,0,0,0"/>
-                                                </StackPanel>
-                                            </StackPanel>
-                                        </DataTemplate>
-                                    </ListBox.ItemTemplate>
+
+                                    <ListBox.ItemTemplateSelector>
+                                        <StaticResource ResourceKey="MessageTemplateSelector"/>
+                                    </ListBox.ItemTemplateSelector>
+
 
                                 </ListBox>
                             </ScrollViewer>
@@ -148,7 +188,12 @@
                     <Button x:Name="emoji_btn" Width="25" Height="25" Margin="5" BorderThickness="0" Click="EmojiBtn_Click">
                         <Image Source="emoji.png" Width="25" Height="25"/>
                     </Button>
-                    <RichTextBox x:Name="MessageRichBox" AcceptsReturn="True" VerticalScrollBarVisibility="Auto" Width="482"/>
+                    <RichTextBox x:Name="MessageRichBox"
+                         AcceptsReturn="True"
+                         VerticalScrollBarVisibility="Auto"
+                         Width="482"
+                         TextChanged="MessageRichBox_TextChanged"
+                         KeyDown="MessageRichBox_KeyDown"/> 
                     <Button Content="Отправить" Click="SendMessage_Click" Width="100" Height="25" Margin="0,0,0,-2"/>
                 </StackPanel>
             </StackPanel>

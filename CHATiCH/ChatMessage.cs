@@ -11,12 +11,14 @@ namespace CHATiCH
 
         public string Id { get; set; }
         public string Author { get; set; }
-        public string Text { get; set; }
+        public string Text { get; set; }       // Markdown для отображения
+        public string FileName { get; set; }   // Отображаемое имя файла
+        public string FileUrl { get; set; }    // Чистый URL для скачивания
         public DateTime Time { get; set; }
 
         public bool IsIncoming
         {
-            get { return _isIncoming; }
+            get => _isIncoming;
             set
             {
                 if (_isIncoming != value)
@@ -31,7 +33,7 @@ namespace CHATiCH
 
         public MessageStatus Status
         {
-            get { return _status; }
+            get => _status;
             set
             {
                 if (_status != value)
@@ -43,38 +45,22 @@ namespace CHATiCH
             }
         }
 
-        public Brush AuthorBrush
-        {
-            get { return IsIncoming ? Brushes.Blue : Brushes.Green; }
-        }
+        public Brush AuthorBrush => IsIncoming ? Brushes.Blue : Brushes.Green;
 
-        public string ReceiptText
-        {
-            get
-            {
-                if (IsIncoming)
-                {
-                    return Status == MessageStatus.Read ? "" : "•";
-                }
-                else
-                {
-                    return Status == MessageStatus.Read ? "✔ Прочитано" : "• Отправлено";
-                }
-            }
-        }
+        public string ReceiptText => IsIncoming
+            ? (Status == MessageStatus.Read ? "" : "•")
+            : (Status == MessageStatus.Read ? "✔ Прочитано" : "• Отправлено");
 
         public override string ToString()
         {
             string who = IsIncoming ? Author : "Я";
-            return string.Format("{0}: {1} [{2:HH:mm}] ({3})", who, Text, Time, Status);
+            return $"{who}: {Text} [{Time:HH:mm}] ({Status})";
         }
 
         public event PropertyChangedEventHandler PropertyChanged;
         protected void OnPropertyChanged(string name)
         {
-            var handler = PropertyChanged;
-            if (handler != null)
-                handler(this, new PropertyChangedEventArgs(name));
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
         }
     }
 }

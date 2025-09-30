@@ -194,7 +194,10 @@
     <Compile Include="HistoryWindow.xaml.cs">
       <DependentUpon>HistoryWindow.xaml</DependentUpon>
     </Compile>
+    <Compile Include="IncomingMessageBrushConverter.cs" />
+    <Compile Include="LinkConverters.cs" />
     <Compile Include="MessageStatus.cs" />
+    <Compile Include="MessageTemplateSelector.cs" />
     <Compile Include="UserContact.cs" />
     <Page Include="ChatWindow.xaml">
       <Generator>MSBuild:Compile</Generator>
