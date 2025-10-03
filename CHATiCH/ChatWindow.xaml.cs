@@ -19,9 +19,11 @@ using Newtonsoft.Json;
 using System.Globalization;
 using System.Windows.Controls.Primitives;
 using System.Threading.Tasks;
-using System.Windows.Navigation;
+using System.Text.RegularExpressions;
 using System.Net;
 using Microsoft.Win32;
+using System.Collections.Generic;
+using System.Text;
 
 
 
@@ -42,6 +44,8 @@ namespace CHATiCH
         public Uri BaseUri { get; } = new Uri(AppDomain.CurrentDomain.BaseDirectory);
         public ObservableCollection<UserContact> Contacts { get; set; } = new ObservableCollection<UserContact>();
         public ObservableCollection<ChatTab> ChatTabsItems { get; set; } = new ObservableCollection<ChatTab>();
+        public ObservableCollection<ContactGroup> ContactGroups { get; set; } = new ObservableCollection<ContactGroup>();
+
 
         public ICommand CloseTabCommand { get; }
 
@@ -60,11 +64,11 @@ namespace CHATiCH
         public ChatWindow(XmppClient client)
         {
             InitializeComponent();
-            
+
             _client = client;
             DataContext = this;
 
-            ContactsList.ItemsSource = Contacts;
+            
             ChatTabs.ItemsSource = ChatTabsItems;
 
             CloseTabCommand = new RelayCommand<ChatTab>(CloseTab);
@@ -375,23 +379,40 @@ namespace CHATiCH
             try
             {
                 var roster = _client.GetRoster();
+                var groupsDict = new Dictionary<string, ContactGroup>();
+
+                foreach (var item in roster)
+                {
+                    // берем только группы, начинающиеся с "IM_"
+                    var imGroup = item.Groups.FirstOrDefault(g => g.StartsWith("IM_"));
+                    if (imGroup == null) continue; // пропускаем пользователя без IM_ группы
+
+                    string groupName = imGroup.Substring(3); // убираем префикс IM_
+
+                    if (!groupsDict.ContainsKey(groupName))
+                        groupsDict[groupName] = new ContactGroup { Name = groupName };
+
+                    string bareJid = item.Jid.Node + "@" + item.Jid.Domain;
+
+                    if (!groupsDict[groupName].Contacts.Any(c => c.Jid == bareJid))
+                    {
+                        var contact = new UserContact
+                        {
+                            Jid = bareJid,
+                            Name = string.IsNullOrEmpty(item.Name) ? bareJid : item.Name,
+                            Availability = Availability.Offline,
+                            StatusText = "Неизвестен"
+                        };
+                        groupsDict[groupName].Contacts.Add(contact);
+                    }
+                }
+
+                // Обновляем ObservableCollection для UI
                 Dispatcher.Invoke(() =>
                 {
-                    foreach (var item in roster)
-                    {
-                        var bareJid = item.Jid.Node + "@" + item.Jid.Domain; // Fix
-
-                        if (!Contacts.Any(c => c.Jid == bareJid))
-                        {
-                            Contacts.Add(new UserContact
-                            {
-                                Jid = bareJid,
-                                Name = string.IsNullOrEmpty(item.Name) ? bareJid : item.Name,
-                                Availability = Availability.Offline,
-                                StatusText = "Неизвестен"
-                            });
-                        }
-                    }
+                    ContactGroups.Clear();
+                    foreach (var group in groupsDict.Values.OrderBy(g => g.Name))
+                        ContactGroups.Add(group);
                 });
             }
             catch (Exception ex)
@@ -400,19 +421,26 @@ namespace CHATiCH
             }
         }
 
+
         private void OnStatusChanged(object sender, StatusEventArgs e)
         {
             Dispatcher.Invoke(() =>
             {
-                var bareJid = e.Jid.Node + "@" + e.Jid.Domain; // Fix
-                var contact = Contacts.FirstOrDefault(c => c.Jid == bareJid);
-                if (contact != null)
+                string bareJid = e.Jid.Node + "@" + e.Jid.Domain;
+
+                foreach (var group in ContactGroups)
                 {
-                    contact.Availability = e.Status.Availability;
-                    contact.StatusText = e.Status.Message ?? "Неизвестен";
+                    var contact = group.Contacts.FirstOrDefault(c => c.Jid == bareJid);
+                    if (contact != null)
+                    {
+                        contact.Availability = e.Status.Availability;
+                        contact.StatusText = e.Status.Message ?? "Неизвестен";
+                        break;
+                    }
                 }
             });
         }
+
 
         private void OnRosterUpdated(object sender, EventArgs e) => Dispatcher.Invoke(LoadRoster);
 
@@ -421,14 +449,16 @@ namespace CHATiCH
             Dispatcher.Invoke(() =>
             {
                 string body = e.Message?.Body ?? string.Empty;
-                string bareJid = e.Jid.Node + "@" + e.Jid.Domain; // Fix
+                string bareJid = e.Jid.Node + "@" + e.Jid.Domain;
 
                 if (string.IsNullOrWhiteSpace(body))
                     return;
 
+                // Убираем MetaEscape в начале
                 if (body.StartsWith(MetaEscape))
                     body = body.Substring(MetaEscape.Length);
 
+                // --- Receipt (подтверждение доставки/прочтения) ---
                 if (body.StartsWith(MetaPrefixReceipt))
                 {
                     int start = MetaPrefixReceipt.Length;
@@ -453,32 +483,26 @@ namespace CHATiCH
                     return;
                 }
 
-                if (body.StartsWith("##state:"))
+                // --- Состояния (печатает/активен/пауза) ---
+                if (body.StartsWith(MetaPrefixState))
                 {
-                    int start = "##state:".Length;
+                    int start = MetaPrefixState.Length;
                     int end = body.IndexOf("##", start);
                     string state = end > start ? body.Substring(start, end - start) : "";
 
                     var chatTab = ChatTabsItems.FirstOrDefault(t => t.Jid == bareJid);
                     if (chatTab != null)
                     {
-                        Dispatcher.Invoke(() =>
-                        {
-                            if (state == "composing")
-                                chatTab.TypingText = $"{bareJid} печатает...";
-                            else
-                                chatTab.TypingText = "";
-                        });
+                        chatTab.TypingText = state == "composing" ? $"{bareJid} печатает..." : "";
                     }
-
                     return;
                 }
 
-
-
+                // --- Обычные сообщения / файлы / эмодзи ---
                 string incomingId = null;
                 string realText = body;
 
+                // Если есть Id
                 if (body.StartsWith(MetaPrefixId))
                 {
                     int start = MetaPrefixId.Length;
@@ -487,9 +511,57 @@ namespace CHATiCH
                     {
                         incomingId = body.Substring(start, end - start);
                         realText = body.Substring(end + 2);
+
+                        // 🔥 убираем escape, если он есть
+                        if (realText.StartsWith(MetaEscape))
+                            realText = realText.Substring(MetaEscape.Length);
                     }
                 }
+                // ... (существующий код парсинга ID)
 
+                if (realText.StartsWith(MetaEscape))
+                {
+                    realText = realText.Substring(MetaEscape.Length);
+                }
+
+                // ... (существующий код парсинга ID и удаления MetaEscape)
+
+                var match = Regex.Match(realText, @"^\[(.+?)\]\((https?://.+?)\)$");
+                if (match.Success)
+                {
+                    ChatMessage incoming;
+                    string fileName = match.Groups[1].Value;
+                    string fileUrl = match.Groups[2].Value;
+
+                    incoming = new ChatMessage
+                    {
+                        Id = incomingId,
+                        Author = bareJid,
+                        Text = realText,  // Оставьте realText для fallback-рендеринга в MarkdownTemplate
+                        Time = DateTime.Now,
+                        IsIncoming = true,
+                        Status = MessageStatus.Sent,
+                        FileName = fileName,
+                        FileUrl = fileUrl
+                    };
+                }
+                else
+                {
+                    ChatMessage incoming;
+                    incoming = new ChatMessage
+                    {
+                        Id = incomingId,
+                        Author = bareJid,
+                        Text = realText,
+                        Time = DateTime.Now,
+                        IsIncoming = true,
+                        Status = MessageStatus.Sent
+                    };
+                }
+
+                // ... (остальное без изменений)
+
+                // Загружаем/создаём вкладку для контакта
                 var chatTabExist = ChatTabsItems.FirstOrDefault(t => t.Jid == bareJid);
                 ObservableCollection<ChatMessage> messages;
                 if (chatTabExist == null)
@@ -505,26 +577,43 @@ namespace CHATiCH
 
                 if (messages != null)
                 {
+                    string fileName = null;
+                    string fileUrl = null;
+
+                    // Проверяем Markdown-ссылку, НО не для эмодзи (![](...))
+                    var mdLinkMatch = System.Text.RegularExpressions.Regex.Match(realText, @"(?<!!)\[(.*?)\]\((.*?)\)");
+                    if (mdLinkMatch.Success)
+                    {
+                        fileName = mdLinkMatch.Groups[1].Value;
+                        fileUrl = mdLinkMatch.Groups[2].Value;
+                    }
+
                     var incoming = new ChatMessage
                     {
                         Id = incomingId,
                         Author = bareJid,
-                        Text = realText,
+                        Text = realText,          // В JSON всё равно будет полный текст (с эмодзи или Markdown)
                         Time = DateTime.Now,
                         IsIncoming = true,
-                        Status = MessageStatus.Sent
+                        Status = MessageStatus.Sent,
+                        FileName = fileName,      // Только если это файл
+                        FileUrl = fileUrl
                     };
                     messages.Add(incoming);
                     ScheduleSave(bareJid, messages);
 
+                    // Уведомление в трее, если окно неактивно
                     if (!IsActive)
                     {
-                        _trayIcon.ShowBalloonTip("Новое сообщение", $"{bareJid}: {realText.Truncate(50)}", BalloonIcon.Info);
+                        _trayIcon.ShowBalloonTip("Новое сообщение",
+                            $"{bareJid}: {realText.Truncate(50)}",
+                            BalloonIcon.Info);
                     }
                 }
             });
         }
-       
+
+
 
 
         private void SendMessage_Click(object sender, RoutedEventArgs e)
@@ -562,7 +651,7 @@ namespace CHATiCH
 
                 // Отправка через XMPP
                 string msgId = Guid.NewGuid().ToString("N");
-                string payload = MetaPrefixId + msgId + "##" + MetaEscape + fileMessage.Text;
+                string payload = MetaPrefixId + msgId + "##" + (fileMessage.Text.StartsWith("##") ? MetaEscape + fileMessage.Text : fileMessage.Text);                
                 _client.SendMessage(new Jid(chatTab.Jid), payload);
 
                 SelectedFileText.Text = "";
@@ -687,9 +776,10 @@ namespace CHATiCH
             _client.SendMessage(new Jid(jid), payload);
         }
 
-        private void ContactsList_MouseDoubleClick(object sender, MouseButtonEventArgs e)
+        private void ContactsTree_MouseDoubleClick(object sender, MouseButtonEventArgs e)
         {
-            if (ContactsList.SelectedItem is UserContact contact)
+            // Получаем элемент под мышью
+            if (e.OriginalSource is FrameworkElement fe && fe.DataContext is UserContact contact)
             {
                 var existingTab = ChatTabsItems.FirstOrDefault(t => t.Jid == contact.Jid);
                 if (existingTab == null)
@@ -706,7 +796,8 @@ namespace CHATiCH
             }
         }
 
-        private string GetBareJid(Jid jid) => jid.Node + "@" + jid.Domain; // Fix
+
+        
 
         private void CloseTab(ChatTab tab)
         {
@@ -779,6 +870,17 @@ namespace CHATiCH
             }
         }
 
+        public class ContactGroup : INotifyPropertyChanged
+        {
+            public string Name { get; set; }
+            public ObservableCollection<UserContact> Contacts { get; set; } = new ObservableCollection<UserContact>();
+
+            public event PropertyChangedEventHandler PropertyChanged;
+            protected void OnPropertyChanged(string name)
+            {
+                PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
+            }
+        }
 
         private void OpenHistory_Click(object sender, RoutedEventArgs e)
         {
