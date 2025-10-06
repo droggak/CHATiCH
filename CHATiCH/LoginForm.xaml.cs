@@ -9,8 +9,24 @@ namespace CHATiCH
         public LoginForm()
         {
             InitializeComponent();
+            LoadConfig();
         }
+        private void LoadConfig()
+        {
+            var config = AppConfig.Load();
+            if (config != null && config.RememberMe)
+            {
+                txtUsername.Text = config.Username;
+                txtDomain.Text = config.Domain;
+                chkRememberMe.IsChecked = config.RememberMe;
+                chkRememberPassword.IsChecked = config.RememberPassword;
 
+                if (config.RememberPassword && !string.IsNullOrEmpty(config.EncryptedPassword))
+                {
+                    txtPassword.Password = AppConfig.Decrypt(config.EncryptedPassword);
+                }
+            }
+        }
         private void BtnLogin_Click(object sender, RoutedEventArgs e)
         {
             try
@@ -30,12 +46,24 @@ namespace CHATiCH
 
                 // пробуем подключиться
                 client.Connect();
+                var config = new AppConfig
+                {
+                    Username = username,
+                    Domain = domain,
+                    RememberMe = chkRememberMe.IsChecked == true,
+                    RememberPassword = chkRememberPassword.IsChecked == true,
+                    EncryptedPassword = chkRememberPassword.IsChecked == true
+                        ? AppConfig.Encrypt(password)
+                        : null
+                };
 
+                config.Save();
                 // запускаем чат
                 var chatWindow = new ChatWindow(client);
                 chatWindow.Show();
 
                 this.Close();
+
             }
             catch (Exception ex)
             {

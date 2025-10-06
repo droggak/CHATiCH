@@ -25,10 +25,6 @@ using Microsoft.Win32;
 using System.Collections.Generic;
 using System.Text;
 
-
-
-
-
 namespace CHATiCH
 {
     public partial class ChatWindow : Window
@@ -45,6 +41,7 @@ namespace CHATiCH
         public ObservableCollection<UserContact> Contacts { get; set; } = new ObservableCollection<UserContact>();
         public ObservableCollection<ChatTab> ChatTabsItems { get; set; } = new ObservableCollection<ChatTab>();
         public ObservableCollection<ContactGroup> ContactGroups { get; set; } = new ObservableCollection<ContactGroup>();
+        private string StatusFilePath => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments),"ChatStatus.txt");
 
 
         public ICommand CloseTabCommand { get; }
@@ -64,11 +61,15 @@ namespace CHATiCH
         public ChatWindow(XmppClient client)
         {
             InitializeComponent();
+            this.Loaded += ChatWindow_Loaded;
+        
 
-            _client = client;
+        _client = client;
             DataContext = this;
 
-            
+            // Загружаем сохранённый статус
+            StatusMessageBox.Text = Properties.Settings.Default.UserStatus;
+
             ChatTabs.ItemsSource = ChatTabsItems;
 
             CloseTabCommand = new RelayCommand<ChatTab>(CloseTab);
@@ -284,6 +285,24 @@ namespace CHATiCH
 
         private void ChatWindow_Closing(object sender, CancelEventArgs e)
         {
+            // Сохраняем текст из StatusMessageBox в файл
+            try
+            {
+                if (StatusMessageBox != null)
+                {
+                    string path = Path.Combine(
+                        Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments),
+                        "ChatStatus.txt");
+
+                    File.WriteAllText(path, StatusMessageBox.Text, Encoding.UTF8);
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("Ошибка сохранения статуса при закрытии: " + ex.Message);
+            }
+
+            // Очистка ресурсов
             _trayIcon?.Dispose();
             try
             {
@@ -295,6 +314,7 @@ namespace CHATiCH
                 Console.WriteLine($"Ошибка при отключении: {ex.Message}");
             }
         }
+
 
         private void OnActivity(object sender, PreProcessInputEventArgs e)
         {
@@ -314,6 +334,9 @@ namespace CHATiCH
         {
             try
             {
+                string selfJid = _client.Jid.Node + "@" + _client.Jid.Domain; // собственный JID
+                var selfContact = Contacts.FirstOrDefault(c => c.Jid == selfJid);
+
                 if (!_manualStatusSet)
                 {
                     var idleTime = DateTime.Now - _lastActivityTime;
@@ -323,6 +346,8 @@ namespace CHATiCH
                         {
                             StatusComboBox.SelectedIndex = 1;
                             UpdateStatus(Availability.Away, StatusMessageBox?.Text ?? "Отошел");
+                            if (selfContact != null)
+                                selfContact.Availability = Availability.Away; // меняем цвет шарика
                         }
                     }
                     else
@@ -332,9 +357,12 @@ namespace CHATiCH
                         {
                             StatusComboBox.SelectedIndex = 0;
                             UpdateStatus(Availability.Online, StatusMessageBox?.Text ?? "Online via WPF");
+                            if (selfContact != null)
+                                selfContact.Availability = Availability.Online; // меняем цвет шарика
                         }
                     }
                 }
+
 
                 var currentAvailability = GetUiSelectedAvailability();
                 var currentStatusText = StatusMessageBox?.Text ?? "";
@@ -345,7 +373,7 @@ namespace CHATiCH
                 {
                     foreach (var item in roster)
                     {
-                        var bareJid = item.Jid.Node + "@" + item.Jid.Domain; // Fix
+                        var bareJid = item.Jid.Node + "@" + item.Jid.Domain;
 
                         var contact = Contacts.FirstOrDefault(c => c.Jid == bareJid);
                         if (contact == null)
@@ -366,6 +394,7 @@ namespace CHATiCH
                 Console.WriteLine($"Ошибка в StatusTimer_Tick: {ex.Message}");
             }
         }
+
 
         private Availability GetUiSelectedAvailability()
         {
@@ -807,16 +836,70 @@ namespace CHATiCH
 
         private void StatusComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {
-            _manualStatusSet = true;
-            var availability = GetUiSelectedAvailability();
+            if (_client == null || !_client.Connected)
+                return;
+
+            var selectedItem = StatusComboBox.SelectedItem as ComboBoxItem;
+            if (selectedItem == null)
+                return;
+
+            string tag = selectedItem.Tag?.ToString();
+            Availability availability;
+            if (tag == "Online")
+                availability = Availability.Online;
+            else if (tag == "Away")
+                availability = Availability.Away;
+            else
+                availability = Availability.Online;
+            ;
+
+            // обновляем статус в XMPP
             UpdateStatus(availability, StatusMessageBox?.Text ?? "");
+
+            // принудительно обновляем цвет шарика
+            string selfJid = _client.Jid.Node + "@" + _client.Jid.Domain;
+            var selfContact = Contacts.FirstOrDefault(c => c.Jid == selfJid);
+            if (selfContact != null)
+            {
+                selfContact.Availability = availability;
+            }
+
+            _manualStatusSet = true;
         }
+
 
         private void StatusMessageBox_LostFocus(object sender, RoutedEventArgs e)
         {
             var availability = GetUiSelectedAvailability();
             UpdateStatus(availability, StatusMessageBox?.Text ?? "");
+
+            // Сохраняем текст в файл
+            try
+            {
+                File.WriteAllText(StatusFilePath, StatusMessageBox.Text, Encoding.UTF8);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("Ошибка сохранения статуса: " + ex.Message);
+            }
         }
+
+        private void ChatWindow_Loaded(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                if (File.Exists(StatusFilePath))
+                {
+                    StatusMessageBox.Text = File.ReadAllText(StatusFilePath, Encoding.UTF8);
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("Ошибка загрузки сохранённого статуса: " + ex.Message);
+            }
+        }
+
+
 
         private void UpdateStatus(Availability availability, string statusText)
         {
@@ -930,16 +1013,6 @@ namespace CHATiCH
                 }
                 return false;
             };
-        }
-
-        private void ContactsList_SelectionChanged(object sender, SelectionChangedEventArgs e)
-        {
-
-        }
-
-        private void MarkdownScrollViewer_Scroll(object sender, ScrollEventArgs e)
-        {
-
         }
     }
 

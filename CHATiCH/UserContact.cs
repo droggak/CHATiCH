@@ -15,17 +15,18 @@ namespace CHATiCH
 
         public Availability Availability
         {
-            get { return _availability; }
+            get => _availability;
             set
             {
                 if (_availability != value)
                 {
                     _availability = value;
                     OnPropertyChanged(nameof(Availability));
-                    OnPropertyChanged(nameof(StatusBrush));
+                    OnPropertyChanged(nameof(StatusBrush)); // уведомляем, что цвет тоже поменялся
                 }
             }
         }
+
 
         public string StatusText
         {
@@ -47,7 +48,7 @@ namespace CHATiCH
                 if (Availability == Availability.Online)
                     return Brushes.Green;
                 else if (Availability == Availability.Away)
-                    return Brushes.Green;
+                    return Brushes.Orange;
                 else
                     return Brushes.Gray;
             }
