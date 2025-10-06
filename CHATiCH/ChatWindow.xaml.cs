@@ -16,6 +16,7 @@ using S22.Xmpp;
 using S22.Xmpp.Client;
 using S22.Xmpp.Im;
 using Newtonsoft.Json;
+using System.Text.Json;
 using System.Globalization;
 using System.Windows.Controls.Primitives;
 using System.Threading.Tasks;
@@ -35,6 +36,7 @@ namespace CHATiCH
         private DateTime _lastActivityTime;
         private bool _manualStatusSet = false;
         private string _uploadedFileName = null;
+        private readonly string favoritesFile;
 
 
         public Uri BaseUri { get; } = new Uri(AppDomain.CurrentDomain.BaseDirectory);
@@ -43,6 +45,7 @@ namespace CHATiCH
         public ObservableCollection<ContactGroup> ContactGroups { get; set; } = new ObservableCollection<ContactGroup>();
         private string StatusFilePath => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments),"ChatStatus.txt");
 
+        public ObservableCollection<UserContact> FavoriteContacts { get; set; } = new ObservableCollection<UserContact>();
 
         public ICommand CloseTabCommand { get; }
 
@@ -64,9 +67,14 @@ namespace CHATiCH
             this.Loaded += ChatWindow_Loaded;
         
 
-        _client = client;
+            _client = client;
             DataContext = this;
+            string documentsPath = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
+            string appFolder = Path.Combine(documentsPath, "CHATiCH");
+            if (!Directory.Exists(appFolder))
+                Directory.CreateDirectory(appFolder);
 
+            favoritesFile = Path.Combine(appFolder, "favorites.json");
             // Загружаем сохранённый статус
             StatusMessageBox.Text = Properties.Settings.Default.UserStatus;
 
@@ -410,13 +418,30 @@ namespace CHATiCH
                 var roster = _client.GetRoster();
                 var groupsDict = new Dictionary<string, ContactGroup>();
 
+                // Папка для конфигурации пользователя
+                string folder = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "CHATiCH");
+                if (!Directory.Exists(folder))
+                    Directory.CreateDirectory(folder);
+
+                string favPath = Path.Combine(folder, "favorites.json");
+
+                // Загружаем избранные из файла
+                var favoriteJids = new List<string>();
+                if (File.Exists(favPath))
+                {
+                    favoriteJids = JsonConvert.DeserializeObject<List<string>>(File.ReadAllText(favPath));
+                }
+
+                // Очищаем коллекцию избранного перед добавлением
+                FavoriteContacts.Clear();
+
                 foreach (var item in roster)
                 {
                     // берем только группы, начинающиеся с "IM_"
                     var imGroup = item.Groups.FirstOrDefault(g => g.StartsWith("IM_"));
-                    if (imGroup == null) continue; // пропускаем пользователя без IM_ группы
+                    if (imGroup == null) continue;
 
-                    string groupName = imGroup.Substring(3); // убираем префикс IM_
+                    string groupName = imGroup.Substring(3);
 
                     if (!groupsDict.ContainsKey(groupName))
                         groupsDict[groupName] = new ContactGroup { Name = groupName };
@@ -430,9 +455,16 @@ namespace CHATiCH
                             Jid = bareJid,
                             Name = string.IsNullOrEmpty(item.Name) ? bareJid : item.Name,
                             Availability = Availability.Offline,
-                            StatusText = "Неизвестен"
+                            StatusText = "Неизвестен",
+                            IsFavorite = favoriteJids.Contains(bareJid) // помечаем как избранное
                         };
+                        contact.PropertyChanged += UserContact_PropertyChanged;
+
                         groupsDict[groupName].Contacts.Add(contact);
+
+                        // Если контакт избран — добавляем в коллекцию избранного
+                        if (contact.IsFavorite)
+                            FavoriteContacts.Add(contact);
                     }
                 }
 
@@ -440,6 +472,16 @@ namespace CHATiCH
                 Dispatcher.Invoke(() =>
                 {
                     ContactGroups.Clear();
+
+                    // 1. Добавляем "Избранное" как отдельную группу
+                    var favoriteGroup = new ContactGroup
+                    {
+                        Name = "Избранное",
+                        Contacts = FavoriteContacts
+                    };
+                    ContactGroups.Add(favoriteGroup);
+
+                    // 2. Добавляем остальные группы
                     foreach (var group in groupsDict.Values.OrderBy(g => g.Name))
                         ContactGroups.Add(group);
                 });
@@ -449,6 +491,58 @@ namespace CHATiCH
                 MessageBox.Show($"Ошибка при загрузке ростера: {ex.Message}", "Ошибка", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
+
+
+        private void SaveFavorites()
+        {
+            try
+            {
+                // Берём всех контактов, у которых IsFavorite = true
+                var favoriteJids = ContactGroups
+                    .SelectMany(g => g.Contacts)
+                    .Where(c => c.IsFavorite)
+                    .Select(c => c.Jid)
+                    .ToList();
+
+                // Сохраняем весь список в файл
+                string folder = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "CHATiCH");
+                if (!Directory.Exists(folder))
+                    Directory.CreateDirectory(folder);
+
+                string path = Path.Combine(folder, "favorites.json");
+                File.WriteAllText(path, JsonConvert.SerializeObject(favoriteJids, Formatting.Indented));
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("Ошибка сохранения избранного: " + ex.Message);
+            }
+        }
+
+
+        private void UserContact_PropertyChanged(object sender, PropertyChangedEventArgs e)
+        {
+            if (e.PropertyName == nameof(UserContact.IsFavorite))
+            {
+                var contact = sender as UserContact;
+                if (contact == null) return;
+
+                if (contact.IsFavorite)
+                {
+                    if (!FavoriteContacts.Contains(contact))
+                        FavoriteContacts.Add(contact);
+                }
+                else
+                {
+                    if (FavoriteContacts.Contains(contact))
+                        FavoriteContacts.Remove(contact);
+                }
+
+                SaveFavorites(); // Сохраняем весь список
+            }
+        }
+
+
+
 
 
         private void OnStatusChanged(object sender, StatusEventArgs e)

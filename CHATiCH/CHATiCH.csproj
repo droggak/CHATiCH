@@ -260,5 +260,8 @@
   <ItemGroup>
     <Resource Include="emoji.png" />
   </ItemGroup>
+  <ItemGroup>
+    <Resource Include="star.png" />
+  </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
 </Project>

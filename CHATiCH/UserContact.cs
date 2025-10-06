@@ -54,7 +54,19 @@ namespace CHATiCH
                     return Brushes.Gray;
             }
         }
-
+        private bool _isFavorite = false;
+        public bool IsFavorite
+        {
+            get => _isFavorite;
+            set
+            {
+                if (_isFavorite != value)
+                {
+                    _isFavorite = value;
+                    OnPropertyChanged(nameof(IsFavorite));
+                }
+            }
+        }
         // ---------------- Новый код для индикатора новых сообщений ----------------
         public int UnreadCount
         {

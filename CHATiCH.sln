@@ -5,6 +5,11 @@ VisualStudioVersion = 17.12.35707.178
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CHATiCH", "CHATiCH\CHATiCH.csproj", "{AA7F7DA7-CAF9-4255-AAEF-6550970EB9C7}"
 EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Элементы решения", "Элементы решения", "{8B646097-B9CF-4F2A-AD4A-70202DAC529A}"
+	ProjectSection(SolutionItems) = preProject
+		CHATiCH\img\star.png = CHATiCH\img\star.png
+	EndProjectSection
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
