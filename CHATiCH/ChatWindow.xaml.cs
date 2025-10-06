@@ -629,6 +629,34 @@ namespace CHATiCH
                         FileUrl = fileUrl
                     };
                     messages.Add(incoming);
+
+                    if (!IsActive || ChatTabs.SelectedItem != chatTabExist)
+                    {
+                        chatTabExist.UnreadCount++;
+
+                        // Находим контакт и увеличиваем UnreadCount
+                        var contact = ContactGroups.SelectMany(g => g.Contacts)
+                                                   .FirstOrDefault(c => c.Jid == bareJid);
+                        if (contact != null)
+                            contact.UnreadCount++;
+                    }
+                    else
+                    {
+                        // Если окно активно — помечаем как прочитанное
+                        foreach (var msg in messages.Where(m => m.IsIncoming))
+                            msg.Status = MessageStatus.Read;
+
+                        chatTabExist.UnreadCount = 0;
+
+                        var contact = ContactGroups.SelectMany(g => g.Contacts)
+                                                   .FirstOrDefault(c => c.Jid == bareJid);
+                        if (contact != null)
+                            contact.UnreadCount = 0;
+                    }
+
+
+
+
                     ScheduleSave(bareJid, messages);
 
                     // Уведомление в трее, если окно неактивно
@@ -918,39 +946,37 @@ namespace CHATiCH
         {
             if (ChatTabs.SelectedItem is ChatTab selectedTab)
             {
+                // Сбрасываем UnreadCount сразу
+                selectedTab.UnreadCount = 0;
+                var contact = ContactGroups.SelectMany(g => g.Contacts)
+                                           .FirstOrDefault(c => c.Jid == selectedTab.Jid);
+                if (contact != null)
+                    contact.UnreadCount = 0;
+
                 if (selectedTab.Content is ObservableCollection<ChatMessage> list)
                 {
                     var unreadIncoming = list
                         .Where(m => m.IsIncoming && m.Status == MessageStatus.Sent && !string.IsNullOrEmpty(m.Id))
                         .ToArray();
 
-                    if (unreadIncoming.Length > 0)
+                    foreach (var msg in unreadIncoming)
+                        msg.Status = MessageStatus.Read;
+
+                    ScheduleSave(selectedTab.Jid, list);
+
+                    // Отправляем receipt
+                    foreach (var msg in unreadIncoming)
                     {
-                        // Автоматически помечаем как прочитанное, если окно активно
-                        if (this.IsActive)
+                        try
                         {
-                            foreach (var msg in unreadIncoming)
-                                msg.Status = MessageStatus.Read;
-
-                            ScheduleSave(selectedTab.Jid, list);
-
-                            // Отправляем receipt отправителю
-                            foreach (var msg in unreadIncoming)
-                            {
-                                try
-                                {
-                                    string receiptPayload = MetaPrefixReceipt + msg.Id + "##";
-                                    _client.SendMessage(new Jid(selectedTab.Jid), receiptPayload);
-                                }
-                                catch (Exception ex)
-                                {
-                                    Console.WriteLine("Ошибка отправки receipt: " + ex.Message);
-                                }
-                            }
+                            string receiptPayload = "##receipt:" + msg.Id + "##";
+                            _client.SendMessage(new Jid(selectedTab.Jid), receiptPayload);
                         }
+                        catch { }
                     }
                 }
             }
+
         }
 
         public class ContactGroup : INotifyPropertyChanged
@@ -1035,7 +1061,23 @@ namespace CHATiCH
                 }
             }
         }
+        private int _unreadCount = 0;
+        public int UnreadCount
+        {
+            get => _unreadCount;
+            set
+            {
+                if (_unreadCount != value)
+                {
+                    _unreadCount = value;
+                    OnPropertyChanged(nameof(UnreadCount));
+                    OnPropertyChanged(nameof(UnreadIndicatorVisibility));
+                }
+            }
+        }
 
+        public Visibility UnreadIndicatorVisibility => UnreadCount > 0 ? Visibility.Visible : Visibility.Collapsed;
+        
         public event PropertyChangedEventHandler PropertyChanged;
         protected void OnPropertyChanged(string name)
         {

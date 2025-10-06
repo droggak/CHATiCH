@@ -1,6 +1,7 @@
 ﻿using S22.Xmpp;
 using S22.Xmpp.Im;
 using System.ComponentModel;
+using System.Windows;
 using System.Windows.Media;
 
 namespace CHATiCH
@@ -9,6 +10,7 @@ namespace CHATiCH
     {
         private Availability _availability;
         private string _statusText;
+        private int _unreadCount;
 
         public string Jid { get; set; }
         public string Name { get; set; }
@@ -26,7 +28,6 @@ namespace CHATiCH
                 }
             }
         }
-
 
         public string StatusText
         {
@@ -53,6 +54,24 @@ namespace CHATiCH
                     return Brushes.Gray;
             }
         }
+
+        // ---------------- Новый код для индикатора новых сообщений ----------------
+        public int UnreadCount
+        {
+            get => _unreadCount;
+            set
+            {
+                if (_unreadCount != value)
+                {
+                    _unreadCount = value;
+                    OnPropertyChanged(nameof(UnreadCount));
+                    OnPropertyChanged(nameof(UnreadIndicatorVisibility));
+                }
+            }
+        }
+
+        public Visibility UnreadIndicatorVisibility => UnreadCount > 0 ? Visibility.Visible : Visibility.Collapsed;
+        // --------------------------------------------------------------------------
 
         public event PropertyChangedEventHandler PropertyChanged;
         protected void OnPropertyChanged(string name)
