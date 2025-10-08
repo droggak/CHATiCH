@@ -196,6 +196,7 @@
       <DependentUpon>HistoryWindow.xaml</DependentUpon>
     </Compile>
     <Compile Include="IncomingMessageBrushConverter.cs" />
+    <Compile Include="IsEdited.cs" />
     <Compile Include="LinkConverters.cs" />
     <Compile Include="MessageStatus.cs" />
     <Compile Include="MessageTemplateSelector.cs" />

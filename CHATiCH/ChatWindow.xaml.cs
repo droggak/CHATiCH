@@ -46,6 +46,8 @@ namespace CHATiCH
         private string StatusFilePath => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments),"ChatStatus.txt");
 
         public ObservableCollection<UserContact> FavoriteContacts { get; set; } = new ObservableCollection<UserContact>();
+        public ObservableCollection<string> Reactions { get; set; } = new ObservableCollection<string>();
+
 
         public ICommand CloseTabCommand { get; }
 
@@ -60,6 +62,7 @@ namespace CHATiCH
 
         private string _debounceJid;
         private ObservableCollection<ChatMessage> _debounceMessages;
+        private ChatMessage _editingMessage = null;
 
         public ChatWindow(XmppClient client)
         {
@@ -581,7 +584,7 @@ namespace CHATiCH
                 if (body.StartsWith(MetaEscape))
                     body = body.Substring(MetaEscape.Length);
 
-                // --- Receipt (подтверждение доставки/прочтения) ---
+                // --- Receipt ---
                 if (body.StartsWith(MetaPrefixReceipt))
                 {
                     int start = MetaPrefixReceipt.Length;
@@ -606,7 +609,7 @@ namespace CHATiCH
                     return;
                 }
 
-                // --- Состояния (печатает/активен/пауза) ---
+                // --- State (печатает/пауза) ---
                 if (body.StartsWith(MetaPrefixState))
                 {
                     int start = MetaPrefixState.Length;
@@ -621,11 +624,65 @@ namespace CHATiCH
                     return;
                 }
 
+                // --- Edit incoming message ---
+                if (body.StartsWith("##edit:"))
+                {
+                    int start = "##edit:".Length;
+                    int end = body.IndexOf("##", start);
+                    if (end > start)
+                    {
+                        string editId = body.Substring(start, end - start);
+                        string newText = body.Substring(end + 2);
+
+                        foreach (var tab in ChatTabsItems)
+                        {
+                            if (tab.Content is ObservableCollection<ChatMessage> list)
+                            {
+                                var msg = list.FirstOrDefault(m => m.Id == editId);
+                                if (msg != null)
+                                {
+                                    msg.Text = newText;
+                                    msg.IsEdited = true;
+                                    msg.OnPropertyChanged(nameof(ChatMessage.DisplayText));
+                                    ScheduleSave(tab.Jid, list);
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                    return;
+                }
+                // --- Reaction to message ---
+                if (body.StartsWith("##react:"))
+                {
+                    int start = "##react:".Length;
+                    int end = body.IndexOf("##", start);
+                    if (end > start)
+                    {
+                        string reactId = body.Substring(start, end - start);
+                        string reaction = body.Substring(end + 2);
+
+                        foreach (var tab in ChatTabsItems)
+                        {
+                            if (tab.Content is ObservableCollection<ChatMessage> list)
+                            {
+                                var msg = list.FirstOrDefault(m => m.Id == reactId);
+                                if (!msg.Reactions.Contains(reaction))
+                                {
+                                    msg.Reactions.Add(reaction);
+                                }
+
+                            }
+                        }
+                    }
+                    return;
+                }
+
+
                 // --- Обычные сообщения / файлы / эмодзи ---
                 string incomingId = null;
                 string realText = body;
 
-                // Если есть Id
                 if (body.StartsWith(MetaPrefixId))
                 {
                     int start = MetaPrefixId.Length;
@@ -635,54 +692,32 @@ namespace CHATiCH
                         incomingId = body.Substring(start, end - start);
                         realText = body.Substring(end + 2);
 
-                        // 🔥 убираем escape, если он есть
                         if (realText.StartsWith(MetaEscape))
                             realText = realText.Substring(MetaEscape.Length);
                     }
                 }
-                // ... (существующий код парсинга ID)
 
-                if (realText.StartsWith(MetaEscape))
+                // Определяем Markdown-ссылку на файл
+                string fileName = null;
+                string fileUrl = null;
+                var mdLinkMatch = Regex.Match(realText, @"(?<!!)\[(.*?)\]\((.*?)\)");
+                if (mdLinkMatch.Success)
                 {
-                    realText = realText.Substring(MetaEscape.Length);
+                    fileName = mdLinkMatch.Groups[1].Value;
+                    fileUrl = mdLinkMatch.Groups[2].Value;
                 }
 
-                // ... (существующий код парсинга ID и удаления MetaEscape)
-
-                var match = Regex.Match(realText, @"^\[(.+?)\]\((https?://.+?)\)$");
-                if (match.Success)
+                var incoming = new ChatMessage
                 {
-                    ChatMessage incoming;
-                    string fileName = match.Groups[1].Value;
-                    string fileUrl = match.Groups[2].Value;
-
-                    incoming = new ChatMessage
-                    {
-                        Id = incomingId,
-                        Author = bareJid,
-                        Text = realText,  // Оставьте realText для fallback-рендеринга в MarkdownTemplate
-                        Time = DateTime.Now,
-                        IsIncoming = true,
-                        Status = MessageStatus.Sent,
-                        FileName = fileName,
-                        FileUrl = fileUrl
-                    };
-                }
-                else
-                {
-                    ChatMessage incoming;
-                    incoming = new ChatMessage
-                    {
-                        Id = incomingId,
-                        Author = bareJid,
-                        Text = realText,
-                        Time = DateTime.Now,
-                        IsIncoming = true,
-                        Status = MessageStatus.Sent
-                    };
-                }
-
-                // ... (остальное без изменений)
+                    Id = incomingId,
+                    Author = bareJid,
+                    Text = realText,
+                    Time = DateTime.Now,
+                    IsIncoming = true,
+                    Status = MessageStatus.Sent,
+                    FileName = fileName,
+                    FileUrl = fileUrl
+                };
 
                 // Загружаем/создаём вкладку для контакта
                 var chatTabExist = ChatTabsItems.FirstOrDefault(t => t.Jid == bareJid);
@@ -698,71 +733,59 @@ namespace CHATiCH
                     messages = chatTabExist.Content as ObservableCollection<ChatMessage>;
                 }
 
-                if (messages != null)
+                messages?.Add(incoming);
+
+                // Если окно неактивно — увеличиваем счетчик непрочитанных
+                if (!IsActive || ChatTabs.SelectedItem != chatTabExist)
                 {
-                    string fileName = null;
-                    string fileUrl = null;
+                    chatTabExist.UnreadCount++;
+                    var contact = ContactGroups.SelectMany(g => g.Contacts)
+                                               .FirstOrDefault(c => c.Jid == bareJid);
+                    if (contact != null)
+                        contact.UnreadCount++;
+                }
+                else
+                {
+                    foreach (var msg in messages.Where(m => m.IsIncoming))
+                        msg.Status = MessageStatus.Read;
+                    chatTabExist.UnreadCount = 0;
 
-                    // Проверяем Markdown-ссылку, НО не для эмодзи (![](...))
-                    var mdLinkMatch = System.Text.RegularExpressions.Regex.Match(realText, @"(?<!!)\[(.*?)\]\((.*?)\)");
-                    if (mdLinkMatch.Success)
-                    {
-                        fileName = mdLinkMatch.Groups[1].Value;
-                        fileUrl = mdLinkMatch.Groups[2].Value;
-                    }
+                    var contact = ContactGroups.SelectMany(g => g.Contacts)
+                                               .FirstOrDefault(c => c.Jid == bareJid);
+                    if (contact != null)
+                        contact.UnreadCount = 0;
+                }
 
-                    var incoming = new ChatMessage
-                    {
-                        Id = incomingId,
-                        Author = bareJid,
-                        Text = realText,          // В JSON всё равно будет полный текст (с эмодзи или Markdown)
-                        Time = DateTime.Now,
-                        IsIncoming = true,
-                        Status = MessageStatus.Sent,
-                        FileName = fileName,      // Только если это файл
-                        FileUrl = fileUrl
-                    };
-                    messages.Add(incoming);
+                ScheduleSave(bareJid, messages);
 
-                    if (!IsActive || ChatTabs.SelectedItem != chatTabExist)
-                    {
-                        chatTabExist.UnreadCount++;
-
-                        // Находим контакт и увеличиваем UnreadCount
-                        var contact = ContactGroups.SelectMany(g => g.Contacts)
-                                                   .FirstOrDefault(c => c.Jid == bareJid);
-                        if (contact != null)
-                            contact.UnreadCount++;
-                    }
-                    else
-                    {
-                        // Если окно активно — помечаем как прочитанное
-                        foreach (var msg in messages.Where(m => m.IsIncoming))
-                            msg.Status = MessageStatus.Read;
-
-                        chatTabExist.UnreadCount = 0;
-
-                        var contact = ContactGroups.SelectMany(g => g.Contacts)
-                                                   .FirstOrDefault(c => c.Jid == bareJid);
-                        if (contact != null)
-                            contact.UnreadCount = 0;
-                    }
-
-
-
-
-                    ScheduleSave(bareJid, messages);
-
-                    // Уведомление в трее, если окно неактивно
-                    if (!IsActive)
-                    {
-                        _trayIcon.ShowBalloonTip("Новое сообщение",
-                            $"{bareJid}: {realText.Truncate(50)}",
-                            BalloonIcon.Info);
-                    }
+                // Уведомление в трее, если окно неактивно
+                if (!IsActive)
+                {
+                    _trayIcon.ShowBalloonTip("Новое сообщение",
+                        $"{bareJid}: {realText.Truncate(50)}",
+                        BalloonIcon.Info);
                 }
             });
         }
+
+        private void EditMessage_Click(object sender, RoutedEventArgs e)
+        {
+            if (sender is MenuItem menuItem &&
+                menuItem.DataContext is ChatMessage message)
+            {
+                if ((DateTime.Now - message.Time).TotalMinutes > 3)
+                {
+                    MessageBox.Show("Редактирование сообщений разрешено только в течение 3 минут после отправки.");
+                    return;
+                }
+
+                _editingMessage = message;
+                MessageRichBox.Document.Blocks.Clear();
+                MessageRichBox.Document.Blocks.Add(new Paragraph(new Run(message.Text)));
+                MessageRichBox.Focus();
+            }
+        }
+
 
 
 
@@ -780,6 +803,29 @@ namespace CHATiCH
 
             var messages = chatTab.Content as ObservableCollection<ChatMessage>;
             string markdownText = GetMarkdownFromRichTextBox();
+
+            if (_editingMessage != null)
+            {
+                if (chatTab != null && messages != null) // используем существующие переменные
+                {
+                    _editingMessage.Text = GetMarkdownFromRichTextBox();
+                    _editingMessage.Time = DateTime.Now;
+                    _editingMessage.IsEdited = true; // помечаем как редактированное
+                    _editingMessage.OnPropertyChanged(nameof(ChatMessage.DisplayText));
+                    ScheduleSave(chatTab.Jid, messages);
+
+                    string payload = $"##edit:{_editingMessage.Id}##{_editingMessage.Text}";
+                    _client.SendMessage(new Jid(chatTab.Jid), payload);
+
+                    _editingMessage = null;
+                    SelectedFileText.Text = "";
+                    MessageRichBox.Document.Blocks.Clear();
+
+                    return; // Не отправляем как новое сообщение
+                }
+            }
+
+
 
             if (!string.IsNullOrEmpty(_uploadedFileName))
             {
@@ -872,7 +918,6 @@ namespace CHATiCH
             }
             return markdown.ToString().Trim();
         }
-
 
         private void MessageRichBox_KeyDown(object sender, KeyEventArgs e)
         {

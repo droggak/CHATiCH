@@ -11,6 +11,8 @@
         <local:LinkExtractor x:Key="LinkExtractor"/>
         <local:LinkTextExtractor x:Key="LinkTextExtractor"/>
         <local:IncomingMessageBrushConverter x:Key="IncomingMessageBrushConverter"/>
+        <local:EditedTextConverter x:Key="EditedTextConverter"/>
+
 
         <!-- Стиль для MarkdownScrollViewer -->
         <Style x:Key="MarkdownStyle" TargetType="md:MarkdownScrollViewer">
@@ -41,6 +43,7 @@
 
                     <!-- Время и статус прочтения -->
                     <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                        <TextBlock Text="{Binding EditedText}" Foreground="Gray" FontSize="10" Margin="5,0,0,0"/>
                         <TextBlock Text="{Binding Time, StringFormat=HH:mm}" FontSize="10" Foreground="Gray"/>
                         <TextBlock Text=" " />
                         <TextBlock Text="{Binding Status}" FontSize="10" Foreground="Gray"/>
@@ -53,19 +56,40 @@
 
         <!-- Обычные сообщения -->
         <DataTemplate x:Key="MarkdownTemplate" DataType="{x:Type local:ChatMessage}">
-            <Border CornerRadius="10" Padding="5" Margin="3" 
+            <Border x:Name="MessageBorder" CornerRadius="10" Padding="5" Margin="3"
             Background="{Binding IsIncoming, Converter={StaticResource IncomingMessageBrushConverter}}">
                 <StackPanel>
-                    <TextBlock Text="{Binding Author}" FontWeight="Bold" />
-                    <md:MarkdownScrollViewer Markdown="{Binding Text}" Style="{StaticResource MarkdownStyle}" VerticalScrollBarVisibility="Hidden"/>
+                    <!-- Автор -->
+                    <TextBlock Text="{Binding Author}" FontWeight="Bold"/>
+
+                    <!-- Markdown текст -->
+                    <md:MarkdownScrollViewer Markdown="{Binding DisplayText}" 
+                                     Style="{StaticResource MarkdownStyle}" 
+                                     VerticalScrollBarVisibility="Hidden"/>
+
+                    <Separator Margin="0,2,0,2"/>
+
+                    <!-- Время и статус -->
                     <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                        <TextBlock Text="{Binding IsEdited, Converter={StaticResource EditedTextConverter}}" 
+                           FontSize="10" Foreground="Gray" Margin="0,0,5,0"/>
                         <TextBlock Text="{Binding Time, StringFormat=HH:mm}" FontSize="10" Foreground="Gray"/>
                         <TextBlock Text=" " />
                         <TextBlock Text="{Binding Status}" FontSize="10" Foreground="Gray"/>
                     </StackPanel>
                 </StackPanel>
+
+                <!-- Контекстное меню с редактированием, пересылкой, ответом -->
+                <Border.ContextMenu>
+                    <ContextMenu>
+                        <MenuItem Header="Редактировать" Click="EditMessage_Click"/>
+                        <MenuItem Header="Переслать" />
+                        <MenuItem Header="Ответить" />
+                    </ContextMenu>
+                </Border.ContextMenu>
             </Border>
         </DataTemplate>
+
 
 
         <!-- Подключаем селектор -->
@@ -119,8 +143,7 @@
                         <HierarchicalDataTemplate.ItemTemplate>
                             <DataTemplate>
                                 <StackPanel Orientation="Horizontal">
-                                    <Ellipse Width="10" Height="10" Margin="0,0,5,0"
-                                 Fill="{Binding StatusBrush, Mode=OneWay}"/>
+                                    <Ellipse Width="10" Height="10" Margin="0,0,5,0" Fill="{Binding StatusBrush, Mode=OneWay}"/>
                                     <TextBlock Text="{Binding Name}" />
                                     <TextBlock Text=" (" Margin="5,0,0,0"/>
                                     <TextBlock Text="{Binding StatusText}" Foreground="Gray"/>
@@ -173,7 +196,7 @@
 
                             <Button Content="x"
                                  Command="{Binding DataContext.CloseTabCommand, RelativeSource={RelativeSource AncestorType=Window}}"
-                                 CommandParameter="{Binding}"/>      
+                                 CommandParameter="{Binding}"/>
                         </StackPanel>
 
                     </DataTemplate>
@@ -220,7 +243,7 @@
                          VerticalScrollBarVisibility="Auto"
                          Width="482"
                          TextChanged="MessageRichBox_TextChanged"
-                         KeyDown="MessageRichBox_KeyDown"/> 
+                         KeyDown="MessageRichBox_KeyDown"/>
                     <Button Content="Отправить" Click="SendMessage_Click" Width="100" Height="25" Margin="0,0,0,-2"/>
                 </StackPanel>
             </StackPanel>

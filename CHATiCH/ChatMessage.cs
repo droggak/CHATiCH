@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Windows.Media;
 
@@ -8,13 +9,59 @@ namespace CHATiCH
     {
         private MessageStatus _status;
         private bool _isIncoming;
+        private bool _isEdited;
+        private ObservableCollection<string> _reactions = new ObservableCollection<string>();
 
         public string Id { get; set; }
         public string Author { get; set; }
-        public string Text { get; set; }       // Markdown для отображения
-        public string FileName { get; set; }   // Отображаемое имя файла
-        public string FileUrl { get; set; }    // Чистый URL для скачивания
+        public string Text { get; set; }
+        public string FileName { get; set; }
+        public string FileUrl { get; set; }
         public DateTime Time { get; set; }
+
+        public bool CanEdit => !IsIncoming && (DateTime.Now - Time).TotalMinutes < 3;
+
+        public bool IsEdited
+        {
+            get => _isEdited;
+            set
+            {
+                if (_isEdited != value)
+                {
+                    _isEdited = value;
+                    OnPropertyChanged(nameof(IsEdited));
+                    OnPropertyChanged(nameof(DisplayText));
+                }
+            }
+        }
+
+        public ObservableCollection<string> Reactions
+        {
+            get => _reactions;
+            set
+            {
+                if (_reactions != value)
+                {
+                    _reactions = value;
+                    OnPropertyChanged(nameof(Reactions));
+                }
+            }
+        }
+
+        public void AddReaction(string emoji)
+        {
+            if (!Reactions.Contains(emoji))
+                Reactions.Add(emoji);
+        }
+
+        public void RemoveReaction(string emoji)
+        {
+            if (Reactions.Contains(emoji))
+                Reactions.Remove(emoji);
+        }
+
+        public string EditedText => IsEdited ? "(отредактировано)" : "";
+        public string DisplayText => Text;
 
         public bool IsIncoming
         {
@@ -58,7 +105,7 @@ namespace CHATiCH
         }
 
         public event PropertyChangedEventHandler PropertyChanged;
-        protected void OnPropertyChanged(string name)
+        public void OnPropertyChanged(string name)
         {
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
         }
