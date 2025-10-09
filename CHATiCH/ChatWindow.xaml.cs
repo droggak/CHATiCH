@@ -182,6 +182,124 @@ namespace CHATiCH
             menu.Placement = System.Windows.Controls.Primitives.PlacementMode.Bottom;
             menu.IsOpen = true;
         }
+        public class EmojiToImageConverter : IValueConverter
+        {
+            public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
+            {
+                if (value is string emojiFile)
+                {
+                    string path = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Emoji", emojiFile);
+                    if (File.Exists(path))
+                        return new BitmapImage(new Uri(path));
+                }
+                return null;
+            }
+
+            public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
+            {
+                throw new NotImplementedException();
+            }
+        }
+        private void EmojiButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (!(sender is Button btn)) return;
+            if (!(btn.DataContext is ChatMessage message)) return;
+
+            string emojiDir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "EmojiReactions");
+            if (!Directory.Exists(emojiDir)) return;
+
+            var files = Directory.GetFiles(emojiDir, "*.png");
+            if (files.Length == 0) return;
+
+            var menu = new ContextMenu();
+            var grid = new UniformGrid { Columns = 5 };
+
+            foreach (var file in files)
+            {
+                var img = new Image
+                {
+                    Source = new BitmapImage(new Uri(file)),
+                    Width = 25,
+                    Height = 25,
+                    Margin = new Thickness(2),
+                    Cursor = Cursors.Hand,
+                    Tag = file
+                };
+
+                img.MouseLeftButtonDown += (s, ev) =>
+                {
+                    if (!message.Reactions.Contains(file))
+                    {
+                        message.Reactions.Add(file);
+
+                        // Отправляем реакцию собеседнику
+                        var tab = ChatTabs.SelectedItem as ChatTab;
+                        if (tab != null)
+                        {
+                            string payload = $"##react:{message.Id}##" + Path.GetFileName(file);
+                            _client.SendMessage(new Jid(tab.Jid), payload);
+                        }
+
+                        // Сохраняем историю
+                        if (tab?.Content is ObservableCollection<ChatMessage> list)
+                            ScheduleSave(tab.Jid, list);
+                    }
+
+                    menu.IsOpen = false;
+                };
+
+                grid.Children.Add(img);
+            }
+
+            menu.Items.Add(new MenuItem { Header = grid, StaysOpenOnClick = true, Focusable = false, Background = Brushes.Transparent });
+            menu.PlacementTarget = btn;
+            menu.Placement = PlacementMode.Bottom;
+            menu.IsOpen = true;
+        }
+
+
+
+        private void ReactionImage_Click(object sender, MouseButtonEventArgs e)
+        {
+            if (sender is Image img && img.DataContext is string emoji)
+            {
+                // Получаем родительский ChatMessage
+                if (img.TemplatedParent is ContentPresenter cp && cp.DataContext is ChatMessage message)
+                {
+                    message.Reactions.Remove(emoji);
+
+                    // Сохраняем изменения
+                    var tab = ChatTabs.SelectedItem as ChatTab;
+                    if (tab?.Content is ObservableCollection<ChatMessage> list)
+                        ScheduleSave(tab.Jid, list);
+                }
+            }
+        }
+
+        private void ReactionImage_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+        {
+            if (e.ClickCount == 2 && sender is Image img && img.DataContext is string reactionPath)
+            {
+                // Находим сообщение, которому принадлежит эта реакция
+                if (FindParent<ListBoxItem>(img) is ListBoxItem item && item.DataContext is ChatMessage message)
+                {
+                    message.RemoveReaction(reactionPath);
+
+                    // сохраняем историю
+                    var tab = ChatTabs.SelectedItem as ChatTab;
+                    if (tab?.Content is ObservableCollection<ChatMessage> list)
+                        ScheduleSave(tab.Jid, list);
+                }
+            }
+        }
+
+        private T FindParent<T>(DependencyObject child) where T : DependencyObject
+        {
+            DependencyObject parentObject = VisualTreeHelper.GetParent(child);
+            if (parentObject == null) return null;
+            if (parentObject is T parent) return parent;
+            return FindParent<T>(parentObject);
+        }
 
         private async void FileBtn_Click(object sender, RoutedEventArgs e)
         {
@@ -579,6 +697,29 @@ namespace CHATiCH
 
                 if (string.IsNullOrWhiteSpace(body))
                     return;
+                if (body.StartsWith("##react:"))
+                {
+                    int start = "##react:".Length;
+                    int end = body.IndexOf("##", start);
+                    if (end > start)
+                    {
+                        string reactId = body.Substring(start, end - start);
+                        string reaction = body.Substring(end + 2);
+
+                        foreach (var tab in ChatTabsItems)
+                        {
+                            if (tab.Content is ObservableCollection<ChatMessage> list)
+                            {
+                                var msg = list.FirstOrDefault(m => m.Id == reactId);
+                                if (msg != null && !msg.Reactions.Contains(reaction))
+                                {
+                                    msg.Reactions.Add(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "EmojiReactions", reaction));
+                                }
+                            }
+                        }
+                    }
+                    return;
+                }
 
                 // Убираем MetaEscape в начале
                 if (body.StartsWith(MetaEscape))

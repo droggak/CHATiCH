@@ -12,6 +12,7 @@
         <local:LinkTextExtractor x:Key="LinkTextExtractor"/>
         <local:IncomingMessageBrushConverter x:Key="IncomingMessageBrushConverter"/>
         <local:EditedTextConverter x:Key="EditedTextConverter"/>
+        
 
 
         <!-- Стиль для MarkdownScrollViewer -->
@@ -58,27 +59,56 @@
         <DataTemplate x:Key="MarkdownTemplate" DataType="{x:Type local:ChatMessage}">
             <Border x:Name="MessageBorder" CornerRadius="10" Padding="5" Margin="3"
             Background="{Binding IsIncoming, Converter={StaticResource IncomingMessageBrushConverter}}">
-                <StackPanel>
-                    <!-- Автор -->
-                    <TextBlock Text="{Binding Author}" FontWeight="Bold"/>
+                <Grid>
+                    <!-- Основное содержимое сообщения -->
+                    <StackPanel>
+                        <!-- Автор -->
+                        <TextBlock Text="{Binding Author}" FontWeight="Bold"/>
 
-                    <!-- Markdown текст -->
-                    <md:MarkdownScrollViewer Markdown="{Binding DisplayText}" 
-                                     Style="{StaticResource MarkdownStyle}" 
-                                     VerticalScrollBarVisibility="Hidden"/>
+                        <!-- Markdown текст -->
+                        <md:MarkdownScrollViewer Markdown="{Binding DisplayText}" 
+                                         Style="{StaticResource MarkdownStyle}" 
+                                         VerticalScrollBarVisibility="Hidden"/>
 
-                    <Separator Margin="0,2,0,2"/>
+                        <Separator Margin="0,2,0,2"/>
 
-                    <!-- Время и статус -->
-                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
-                        <TextBlock Text="{Binding IsEdited, Converter={StaticResource EditedTextConverter}}" 
-                           FontSize="10" Foreground="Gray" Margin="0,0,5,0"/>
-                        <TextBlock Text="{Binding Time, StringFormat=HH:mm}" FontSize="10" Foreground="Gray"/>
-                        <TextBlock Text=" " />
-                        <TextBlock Text="{Binding Status}" FontSize="10" Foreground="Gray"/>
+                        <!-- Время и статус -->
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                            <TextBlock Text="{Binding IsEdited, Converter={StaticResource EditedTextConverter}}" 
+                               FontSize="10" Foreground="Gray" Margin="0,0,5,0"/>
+                            <TextBlock Text="{Binding Time, StringFormat=HH:mm}" FontSize="10" Foreground="Gray"/>
+                            <TextBlock Text=" " />
+                            <TextBlock Text="{Binding Status}" FontSize="10" Foreground="Gray"/>
+                        </StackPanel>
                     </StackPanel>
-                </StackPanel>
 
+                    
+                    <!-- Кнопка эмодзи (слева сверху, скрыта по умолчанию) -->
+                    <Button x:Name="EmojiButton"
+                    Content="😊"
+                    Width="25"
+                    Height="25"
+                    HorizontalAlignment="Right"
+                    VerticalAlignment="Top"
+                    Margin="5"
+                    Visibility="Collapsed"
+                    Click="EmojiButton_Click"/>
+
+                    <!-- Эмодзи реакции снизу справа -->
+                    <ItemsControl ItemsSource="{Binding Reactions}" HorizontalAlignment="Left" VerticalAlignment="Bottom">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <StackPanel Orientation="Horizontal"/>
+                            </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Image Source="{Binding}" Width="15" Height="15" Margin="0.5"
+                   MouseLeftButtonDown="ReactionImage_MouseLeftButtonDown"/>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </Grid>
                 <!-- Контекстное меню с редактированием, пересылкой, ответом -->
                 <Border.ContextMenu>
                     <ContextMenu>
@@ -87,8 +117,36 @@
                         <MenuItem Header="Ответить" />
                     </ContextMenu>
                 </Border.ContextMenu>
+                <Border.Triggers>
+                    <EventTrigger RoutedEvent="MouseEnter">
+                        <BeginStoryboard>
+                            <Storyboard>
+                                <ObjectAnimationUsingKeyFrames Storyboard.TargetName="EmojiButton"
+                                                       Storyboard.TargetProperty="Visibility">
+                                    <DiscreteObjectKeyFrame KeyTime="0:0:0" Value="{x:Static Visibility.Visible}"/>
+                                </ObjectAnimationUsingKeyFrames>
+                            </Storyboard>
+                        </BeginStoryboard>
+                    </EventTrigger>
+
+                    <EventTrigger RoutedEvent="MouseLeave">
+                        <BeginStoryboard>
+                            <Storyboard>
+                                <ObjectAnimationUsingKeyFrames Storyboard.TargetName="EmojiButton"
+                                                       Storyboard.TargetProperty="Visibility">
+                                    <DiscreteObjectKeyFrame KeyTime="0:0:0" Value="{x:Static Visibility.Hidden}"/>
+                                </ObjectAnimationUsingKeyFrames>
+                            </Storyboard>
+                        </BeginStoryboard>
+                    </EventTrigger>
+                </Border.Triggers>
             </Border>
+            
         </DataTemplate>
+
+
+
+
 
 
 
