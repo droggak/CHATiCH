@@ -190,6 +190,7 @@
     </ApplicationDefinition>
     <Compile Include="AppConfig.cs" />
     <Compile Include="AutoScrollBehavior.cs" />
+    <Compile Include="BoolToVisibilityConverter.cs" />
     <Compile Include="ChatMessage.cs" />
     <Compile Include="HistoryManager.cs" />
     <Compile Include="HistoryWindow.xaml.cs">
@@ -200,6 +201,9 @@
     <Compile Include="LinkConverters.cs" />
     <Compile Include="MessageStatus.cs" />
     <Compile Include="MessageTemplateSelector.cs" />
+    <Compile Include="SelectContactWindow.xaml.cs">
+      <DependentUpon>SelectContactWindow.xaml</DependentUpon>
+    </Compile>
     <Compile Include="UserContact.cs" />
     <Page Include="ChatWindow.xaml">
       <Generator>MSBuild:Compile</Generator>
@@ -224,6 +228,10 @@
       <DependentUpon>LoginForm.xaml</DependentUpon>
       <SubType>Code</SubType>
     </Compile>
+    <Page Include="SelectContactWindow.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
   </ItemGroup>
   <ItemGroup>
     <Compile Include="Properties\AssemblyInfo.cs">

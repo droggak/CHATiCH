@@ -1132,9 +1132,73 @@ namespace CHATiCH
                 }
             }
         }
+        private void ForwardMessage_Click(object sender, RoutedEventArgs e)
+        {
+            if (sender is MenuItem menuItem && menuItem.DataContext is ChatMessage message)
+            {
+                // Диалог выбора контакта
+                var selectWindow = new SelectContactWindow(ContactGroups);
+                if (selectWindow.ShowDialog() == true)
+                {
+                    var targetJid = selectWindow.SelectedJid;
+                    if (string.IsNullOrEmpty(targetJid))
+                        return;
+
+                    // Находим или создаём вкладку
+                    var targetTab = ChatTabsItems.FirstOrDefault(t => t.Jid == targetJid);
+                    if (targetTab == null)
+                    {
+                        var messages = HistoryManager.LoadHistory(targetJid);
+                        targetTab = new ChatTab { Jid = targetJid, Header = targetJid, Content = messages };
+                        ChatTabsItems.Add(targetTab);
+                    }
+
+                    var list = targetTab.Content as ObservableCollection<ChatMessage>;
+                    string newId = Guid.NewGuid().ToString("N");
+
+                    // Формируем пересланное сообщение
+                    var newMessage = new ChatMessage
+                    {
+                        Id = newId,
+                        Author = "Я",
+                        Time = DateTime.Now,
+                        IsIncoming = false,
+                        Status = MessageStatus.Sent,
+                        Text = message.Text,
+                        FileName = message.FileName,
+                        FileUrl = message.FileUrl,
+                        ForwardedFrom = message.Author,
+                        ForwardedText = message.Text
+                    };
+
+                    list.Add(newMessage);
+
+                    // Отправляем XMPP-пакет с пометкой о пересылке
+                    string payload = MetaPrefixId + newId + "##" + "##fwd:" + message.Author + "##" + message.Text;
+                    _client.SendMessage(new Jid(targetJid), payload);
+
+                    ScheduleSave(targetJid, list);
+                    MessageBox.Show($"Переслано от {message.Author}", "Готово", MessageBoxButton.OK, MessageBoxImage.Information);
+                }
+            }
+        }
 
 
-        
+        private void ReplyMessage_Click(object sender, RoutedEventArgs e)
+        {
+            if (sender is MenuItem menuItem && menuItem.DataContext is ChatMessage message)
+            {
+                // Добавляем цитату в RichTextBox
+                string quote = $"> {message.Author}: {message.Text}\n\n";
+                MessageRichBox.Document.Blocks.Clear();
+                MessageRichBox.Document.Blocks.Add(new Paragraph(new Run(quote)));
+                MessageRichBox.CaretPosition = MessageRichBox.Document.ContentEnd;
+                MessageRichBox.Focus();
+            }
+        }
+
+
+
 
         private void CloseTab(ChatTab tab)
         {

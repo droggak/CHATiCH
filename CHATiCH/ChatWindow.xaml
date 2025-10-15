@@ -12,7 +12,9 @@
         <local:LinkTextExtractor x:Key="LinkTextExtractor"/>
         <local:IncomingMessageBrushConverter x:Key="IncomingMessageBrushConverter"/>
         <local:EditedTextConverter x:Key="EditedTextConverter"/>
-        
+        <local:BoolToVisibilityConverter x:Key="BoolToVisibilityConverter"/>
+
+
 
 
         <!-- Стиль для MarkdownScrollViewer -->
@@ -64,6 +66,16 @@
                     <StackPanel>
                         <!-- Автор -->
                         <TextBlock Text="{Binding Author}" FontWeight="Bold"/>
+                        <!-- Пересланное сообщение -->
+                        <Border BorderThickness="1" BorderBrush="#DDD" CornerRadius="5" Margin="0,0,0,5" Padding="4"
+                                Background="#F5F5F5"
+                                Visibility="{Binding IsForwarded, Converter={StaticResource BoolToVisibilityConverter}}">
+                            <StackPanel>
+                                <TextBlock Text="{Binding ForwardedFrom}" FontWeight="Bold" FontSize="12"/>
+                                <TextBlock Text="Пересланное сообщение:" FontStyle="Italic" Foreground="Gray" FontSize="11"/>
+                                <TextBlock Text="{Binding ForwardedText}" TextWrapping="Wrap" FontSize="12"/>
+                            </StackPanel>
+                        </Border>
 
                         <!-- Markdown текст -->
                         <md:MarkdownScrollViewer Markdown="{Binding DisplayText}" 
@@ -113,8 +125,8 @@
                 <Border.ContextMenu>
                     <ContextMenu>
                         <MenuItem Header="Редактировать" Click="EditMessage_Click"/>
-                        <MenuItem Header="Переслать" />
-                        <MenuItem Header="Ответить" />
+                        <MenuItem Header="Переслать" Click="ForwardMessage_Click"/>
+                        <MenuItem Header="Ответить" Click="ReplyMessage_Click"/>
                     </ContextMenu>
                 </Border.ContextMenu>
                 <Border.Triggers>

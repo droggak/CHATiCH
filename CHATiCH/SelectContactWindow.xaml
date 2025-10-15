@@ -1,0 +1,31 @@
+﻿<Window x:Class="CHATiCH.SelectContactWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Выбор контакта"
+        Height="400" Width="300"
+        WindowStartupLocation="CenterOwner"
+        ResizeMode="NoResize">
+    
+            
+    
+    <Grid Margin="10">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <TextBox x:Name="SearchBox" 
+         Margin="0,0,0,5"
+         TextChanged="SearchBox_TextChanged"/>
+
+        <ListBox x:Name="ContactsList"
+                 DisplayMemberPath="Name"
+                 Grid.Row="1"/>
+
+        <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right">
+            <Button Content="OK" Width="80" Margin="5" Click="Ok_Click"/>
+            <Button Content="Отмена" Width="80" Margin="5" Click="Cancel_Click"/>
+        </StackPanel>
+    </Grid>
+</Window>

@@ -18,6 +18,10 @@ namespace CHATiCH
         public string FileName { get; set; }
         public string FileUrl { get; set; }
         public DateTime Time { get; set; }
+        public string ForwardedFrom { get; set; }
+        public string ForwardedText { get; set; }
+        public bool IsForwarded => !string.IsNullOrEmpty(ForwardedFrom);
+
 
         public bool CanEdit => !IsIncoming && (DateTime.Now - Time).TotalMinutes < 3;
 
