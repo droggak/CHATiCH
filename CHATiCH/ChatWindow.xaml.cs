@@ -37,7 +37,9 @@ namespace CHATiCH
         private bool _manualStatusSet = false;
         private string _uploadedFileName = null;
         private readonly string favoritesFile;
-
+        private string _selectedFilePath;
+        private int _dragDepth = 0;
+        private bool _isDraggingFile = false;
 
         public Uri BaseUri { get; } = new Uri(AppDomain.CurrentDomain.BaseDirectory);
         public ObservableCollection<UserContact> Contacts { get; set; } = new ObservableCollection<UserContact>();
@@ -301,37 +303,40 @@ namespace CHATiCH
             return FindParent<T>(parentObject);
         }
 
-        private async void FileBtn_Click(object sender, RoutedEventArgs e)
+        private void FileBtn_Click(object sender, RoutedEventArgs e)
         {
-            var chatTab = ChatTabs.SelectedItem as ChatTab;
-            if (chatTab == null)
+            var openFileDialog = new Microsoft.Win32.OpenFileDialog
             {
-                MessageBox.Show("Выберите чат перед отправкой файла!", "Ошибка", MessageBoxButton.OK, MessageBoxImage.Warning);
-                return;
-            }
+                Title = "Выберите файл для отправки",
+                Filter = "Все файлы (*.*)|*.*",
+                Multiselect = false
+            };
 
-            var openFileDialog = new Microsoft.Win32.OpenFileDialog();
-            if (openFileDialog.ShowDialog() != true)
-                return;
-
-            string filePath = openFileDialog.FileName;
-
-            try
+            if (openFileDialog.ShowDialog() == true)
             {
-                FileUploadProgressBar.Visibility = Visibility.Visible;
-                var progress = new Progress<double>(p => FileUploadProgressBar.Value = p);
+                string filePath = openFileDialog.FileName;
+                var fileInfo = new FileInfo(filePath);
 
-                _uploadedFileName = await UploadFileAsync(filePath, progress);
+                var chatTab = ChatTabs.SelectedItem as ChatTab;
+                if (chatTab == null)
+                {
+                    MessageBox.Show("Выберите чат перед прикреплением файла!", "Ошибка", MessageBoxButton.OK, MessageBoxImage.Warning);
+                    return;
+                }
 
+                // Отображаем карточку предпросмотра файла
+                FilePreviewPanel.Visibility = Visibility.Visible;
                 FileUploadProgressBar.Visibility = Visibility.Collapsed;
-                SelectedFileText.Text = System.IO.Path.GetFileName(filePath);
-            }
-            catch (Exception ex)
-            {
-                FileUploadProgressBar.Visibility = Visibility.Collapsed;
-                MessageBox.Show("Ошибка при загрузке файла: " + ex.Message, "Ошибка", MessageBoxButton.OK, MessageBoxImage.Error);
+                FileUploadProgressBar.Value = 0;
+
+                SelectedFileName.Text = fileInfo.Name;
+                SelectedFileSize.Text = $"{fileInfo.Length / 1024.0 / 1024.0:F2} MB";
+                _selectedFilePath = filePath;
+                _uploadedFileName = null;
             }
         }
+
+
 
 
         private async Task<string> UploadFileAsync(string filePath, IProgress<double> progress)
@@ -931,9 +936,10 @@ namespace CHATiCH
 
 
 
-        private void SendMessage_Click(object sender, RoutedEventArgs e)
+        private async void SendMessage_Click(object sender, RoutedEventArgs e)
         {
-            if (_client == null || !_client.Connected) return;
+            if (_client == null || !_client.Connected)
+                return;
 
             var chatTab = ChatTabs.SelectedItem as ChatTab;
             if (chatTab == null)
@@ -945,68 +951,84 @@ namespace CHATiCH
             var messages = chatTab.Content as ObservableCollection<ChatMessage>;
             string markdownText = GetMarkdownFromRichTextBox();
 
+            // --- если редактируем сообщение ---
             if (_editingMessage != null)
             {
-                if (chatTab != null && messages != null) // используем существующие переменные
-                {
-                    _editingMessage.Text = GetMarkdownFromRichTextBox();
-                    _editingMessage.Time = DateTime.Now;
-                    _editingMessage.IsEdited = true; // помечаем как редактированное
-                    _editingMessage.OnPropertyChanged(nameof(ChatMessage.DisplayText));
-                    ScheduleSave(chatTab.Jid, messages);
+                _editingMessage.Text = markdownText;
+                _editingMessage.Time = DateTime.Now;
+                _editingMessage.IsEdited = true;
+                _editingMessage.OnPropertyChanged(nameof(ChatMessage.DisplayText));
+                ScheduleSave(chatTab.Jid, messages);
 
-                    string payload = $"##edit:{_editingMessage.Id}##{_editingMessage.Text}";
-                    _client.SendMessage(new Jid(chatTab.Jid), payload);
-
-                    _editingMessage = null;
-                    SelectedFileText.Text = "";
-                    MessageRichBox.Document.Blocks.Clear();
-
-                    return; // Не отправляем как новое сообщение
-                }
-            }
-
-
-
-            if (!string.IsNullOrEmpty(_uploadedFileName))
-            {
-                // Очищаем имя файла от лишних скобок и пробелов
-                string cleanedFileName = Path.GetFileName(SelectedFileText.Text.TrimEnd(')', ' '));
-                string cleanedFileUrl = "http://win-m4f2mfrj6i4.vkr.loc/fileschat/files/" + _uploadedFileName.TrimEnd(')', ' ');
-
-                var fileMessage = new ChatMessage
-                {
-                    Author = "Я",
-                    Time = DateTime.Now,
-                    IsIncoming = false,
-                    Status = MessageStatus.Sent,
-                    Text = $"[{cleanedFileName}]({cleanedFileUrl})", // Markdown для отображения
-                    FileName = cleanedFileName,
-                    FileUrl = cleanedFileUrl
-                };
-
-                messages.Add(fileMessage);
-
-                // Отправка через XMPP
-                string msgId = Guid.NewGuid().ToString("N");
-                string payload = MetaPrefixId + msgId + "##" + (fileMessage.Text.StartsWith("##") ? MetaEscape + fileMessage.Text : fileMessage.Text);                
+                string payload = $"##edit:{_editingMessage.Id}##{_editingMessage.Text}";
                 _client.SendMessage(new Jid(chatTab.Jid), payload);
 
-                SelectedFileText.Text = "";
-                _uploadedFileName = null;
+                _editingMessage = null;
+                _selectedFilePath = null;
+                MessageRichBox.Document.Blocks.Clear();
+
+                return;
             }
 
+            // --- если прикреплён файл (но ещё не отправлен) ---
+            if (FilePreviewPanel.Visibility == Visibility.Visible && !string.IsNullOrEmpty(_selectedFilePath))
+            {
+                try
+                {
+                    FileUploadProgressBar.Visibility = Visibility.Visible;
+                    FileUploadProgressBar.Value = 0;
 
+                    var progress = new Progress<double>(p => FileUploadProgressBar.Value = p);
+                    string uploadedFileName = await UploadFileAsync(_selectedFilePath, progress);
 
+                    FileUploadProgressBar.Visibility = Visibility.Collapsed;
 
+                    string fileName = Path.GetFileName(_selectedFilePath);
+                    string fileUrl = "http://win-m4f2mfrj6i4.vkr.loc/fileschat/files/" + uploadedFileName;
 
+                    string msgId = Guid.NewGuid().ToString("N");
+                    var fileMessage = new ChatMessage
+                    {
+                        Id = msgId,
+                        Author = "Я",
+                        Time = DateTime.Now,
+                        IsIncoming = false,
+                        Status = MessageStatus.Sent,
+                        Text = $"[{fileName}]({fileUrl})",
+                        FileName = fileName,
+                        FileUrl = fileUrl
+                    };
 
+                    messages.Add(fileMessage);
+                    ScheduleSave(chatTab.Jid, messages);
+
+                    string payload = MetaPrefixId + msgId + "##" +
+                        (fileMessage.Text.StartsWith("##") ? MetaEscape + fileMessage.Text : fileMessage.Text);
+                    _client.SendMessage(new Jid(chatTab.Jid), payload);
+
+                    // Очистка панели
+                    FilePreviewPanel.Visibility = Visibility.Collapsed;
+                    FileUploadProgressBar.Value = 0;
+                    _selectedFilePath = null;
+                    _uploadedFileName = null;
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show("Ошибка при загрузке файла: " + ex.Message, "Ошибка", MessageBoxButton.OK, MessageBoxImage.Error);
+                    FileUploadProgressBar.Visibility = Visibility.Collapsed;
+                }
+
+                return; // выходим, чтобы не отправить текст вместе
+            }
+
+            // --- обычное текстовое сообщение ---
             if (messages != null && !string.IsNullOrWhiteSpace(markdownText))
             {
                 try
                 {
                     string msgId = Guid.NewGuid().ToString("N");
-                    string payload = MetaPrefixId + msgId + "##" + (markdownText.StartsWith("##") ? MetaEscape + markdownText : markdownText);
+                    string payload = MetaPrefixId + msgId + "##" +
+                        (markdownText.StartsWith("##") ? MetaEscape + markdownText : markdownText);
 
                     _client.SendMessage(new Jid(chatTab.Jid), payload);
 
@@ -1019,7 +1041,7 @@ namespace CHATiCH
                         IsIncoming = false,
                         Status = MessageStatus.Sent
                     };
-                    Console.WriteLine(markdownText);
+
                     messages.Add(myMsg);
                     ScheduleSave(chatTab.Jid, messages);
 
@@ -1032,6 +1054,7 @@ namespace CHATiCH
                 }
             }
         }
+
         private string GetMarkdownFromRichTextBox()
         {
             var markdown = new System.Text.StringBuilder();
@@ -1182,6 +1205,144 @@ namespace CHATiCH
                 }
             }
         }
+        private void MessagesList_DragEnter(object sender, DragEventArgs e)
+        {
+            if (e.Data.GetDataPresent(DataFormats.FileDrop))
+            {
+                e.Effects = DragDropEffects.Copy;
+                _dragDepth++;
+                DropOverlay.Visibility = Visibility.Visible; // показываем только один раз
+            }
+            else
+            {
+                e.Effects = DragDropEffects.None;
+            }
+        }
+
+        private void MessagesList_DragLeave(object sender, DragEventArgs e)
+        {
+            _dragDepth--;
+            if (_dragDepth <= 0)
+            {
+                _dragDepth = 0;
+                DropOverlay.Visibility = Visibility.Collapsed;
+            }
+        }
+
+        private void MessagesList_Drop(object sender, DragEventArgs e)
+        {
+            _dragDepth = 0; // сбрасываем
+            DropOverlay.Visibility = Visibility.Collapsed;
+
+            if (e.Data.GetDataPresent(DataFormats.FileDrop))
+            {
+                string[] files = (string[])e.Data.GetData(DataFormats.FileDrop);
+                if (files.Length == 0)
+                    return;
+
+                string filePath = files[0];
+                var fileInfo = new FileInfo(filePath);
+
+                var chatTab = ChatTabs.SelectedItem as ChatTab;
+                if (chatTab == null)
+                {
+                    MessageBox.Show("Выберите чат перед прикреплением файла!", "Ошибка", MessageBoxButton.OK, MessageBoxImage.Warning);
+                    return;
+                }
+
+                // Показываем карточку предпросмотра
+                FilePreviewPanel.Visibility = Visibility.Visible;
+                FileUploadProgressBar.Visibility = Visibility.Collapsed;
+                FileUploadProgressBar.Value = 0;
+
+                SelectedFileName.Text = fileInfo.Name;
+                SelectedFileSize.Text = $"{fileInfo.Length / 1024.0 / 1024.0:F2} MB";
+                _selectedFilePath = filePath;
+                _uploadedFileName = null;
+            }
+        }
+
+        private void DropOverlay_MouseDown(object sender, MouseButtonEventArgs e)
+        {
+            // Чтобы по клику на затемнение оно исчезало
+            DropOverlay.Visibility = Visibility.Collapsed;
+        }
+        private void CancelAttachmentButton_Click(object sender, RoutedEventArgs e)
+        {
+            FilePreviewPanel.Visibility = Visibility.Collapsed;
+            FileUploadProgressBar.Value = 0;
+            _selectedFilePath = null;
+            _uploadedFileName = null;
+        }
+        
+
+        private void Window_DragEnter(object sender, DragEventArgs e)
+        {
+            if (e.Data.GetDataPresent(DataFormats.FileDrop))
+            {
+                e.Effects = DragDropEffects.Copy;
+                _isDraggingFile = true;
+                DropOverlay.Visibility = Visibility.Visible;
+            }
+            else
+            {
+                e.Effects = DragDropEffects.None;
+            }
+        }
+
+        private void Window_DragOver(object sender, DragEventArgs e)
+        {
+            if (_isDraggingFile && e.Data.GetDataPresent(DataFormats.FileDrop))
+            {
+                e.Effects = DragDropEffects.Copy;
+                DropOverlay.Visibility = Visibility.Visible;
+            }
+            else
+            {
+                e.Effects = DragDropEffects.None;
+            }
+        }
+
+        private void Window_DragLeave(object sender, DragEventArgs e)
+        {
+            _isDraggingFile = false;
+            DropOverlay.Visibility = Visibility.Collapsed;
+        }
+
+        private void Window_Drop(object sender, DragEventArgs e)
+        {
+            _isDraggingFile = false;
+            DropOverlay.Visibility = Visibility.Collapsed;
+
+            if (e.Data.GetDataPresent(DataFormats.FileDrop))
+            {
+                string[] files = (string[])e.Data.GetData(DataFormats.FileDrop);
+                if (files.Length == 0)
+                    return;
+
+                string filePath = files[0];
+                var fileInfo = new FileInfo(filePath);
+
+                var chatTab = ChatTabs.SelectedItem as ChatTab;
+                if (chatTab == null)
+                {
+                    MessageBox.Show("Выберите чат перед прикреплением файла!", "Ошибка", MessageBoxButton.OK, MessageBoxImage.Warning);
+                    return;
+                }
+
+                // Показываем карточку предпросмотра
+                FilePreviewPanel.Visibility = Visibility.Visible;
+                FileUploadProgressBar.Visibility = Visibility.Collapsed;
+                FileUploadProgressBar.Value = 0;
+
+                SelectedFileName.Text = fileInfo.Name;
+                SelectedFileSize.Text = $"{fileInfo.Length / 1024.0 / 1024.0:F2} MB";
+                _selectedFilePath = filePath;
+                _uploadedFileName = null;
+            }
+        }
+
+
 
 
         private void ReplyMessage_Click(object sender, RoutedEventArgs e)

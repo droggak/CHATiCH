@@ -4,7 +4,13 @@
         xmlns:local="clr-namespace:CHATiCH"
         xmlns:i="http://schemas.microsoft.com/xaml/behaviors"
         xmlns:md="clr-namespace:MdXaml;assembly=MdXaml"
-        Title="Чат" Height="600" Width="900">
+        Title="Чат" Height="600" Width="900"
+        AllowDrop="True"
+        DragEnter="Window_DragEnter"
+        DragOver="Window_DragOver"
+        DragLeave="Window_DragLeave"
+        Drop="Window_Drop">
+        
 
     <Window.Resources>
         <!-- Конвертеры -->
@@ -14,6 +20,13 @@
         <local:EditedTextConverter x:Key="EditedTextConverter"/>
         <local:BoolToVisibilityConverter x:Key="BoolToVisibilityConverter"/>
 
+        <Style TargetType="ProgressBar" x:Key="ModernProgressBar">
+            <Setter Property="Foreground" Value="#4CAF50"/>
+            <Setter Property="Background" Value="#E0E0E0"/>
+            <Setter Property="Height" Value="6"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            
+        </Style>
 
 
 
@@ -193,9 +206,9 @@
                 </ComboBox>
 
                 <TextBox x:Name="StatusMessageBox"
-         Margin="0,5,0,0"
-         Text="Online via WPF"
-         LostFocus="StatusMessageBox_LostFocus"/>
+                         Margin="0,5,0,0"
+                         Text="Online via WPF"
+                         LostFocus="StatusMessageBox_LostFocus"/>
 
                 <Label x:Name="label" Content="Поиск" Width="46" VerticalContentAlignment="Stretch" HorizontalAlignment="Left"/>
                 <TextBox x:Name="SearchTextBox" TextChanged="SearchTextBox_TextChanged" 
@@ -277,11 +290,12 @@
                         <DockPanel>
                             <Label DockPanel.Dock="Bottom" Content="{Binding TypingText}" Foreground="Gray" />
                             <ScrollViewer VerticalScrollBarVisibility="Auto">
-                                <ListBox ItemsSource="{Binding Content}"
-                                         Margin="5"
-                                         BorderThickness="0"
-                                         Background="White"
-                                         x:Name="MessagesList">
+                                <ListBox x:Name="MessagesList"
+                                             Margin="5"
+                                             BorderThickness="0"
+                                             Background="White"
+                                             ItemsSource="{Binding Content}">
+
                                     <i:Interaction.Behaviors>
                                         <local:AutoScrollBehavior />
                                     </i:Interaction.Behaviors>
@@ -299,8 +313,45 @@
             </TabControl>
 
             <StackPanel Grid.Row="1" Orientation="Vertical" Margin="5">
-                <TextBlock x:Name="SelectedFileText" Text="" Foreground="Blue" Margin="0,0,0,2"/>
-                <ProgressBar x:Name="FileUploadProgressBar" Minimum="0" Maximum="100" Height="5" Visibility="Collapsed"/>
+                <Border x:Name="FilePreviewPanel"
+                        BorderBrush="#DDD"
+                        BorderThickness="1"
+                        CornerRadius="6"
+                        Padding="6"
+                        Margin="0,0,0,5"
+                        Background="#F9F9F9"
+                        Visibility="Collapsed">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+
+                        <!-- Информация о файле -->
+                        <StackPanel>
+                            <TextBlock x:Name="SelectedFileText" Visibility="Collapsed" />
+                            <TextBlock x:Name="SelectedFileName" Text="file.txt" FontWeight="Bold" />
+                            <TextBlock x:Name="SelectedFileSize" Text="12.4 MB" FontSize="11" Foreground="Gray" Margin="0,2,0,0"/>
+                            <ProgressBar x:Name="FileUploadProgressBar"
+                                 Minimum="0" Maximum="100"
+                                 Style="{StaticResource ModernProgressBar}"
+                                 Visibility="Collapsed"/>
+                        </StackPanel>
+
+                        <!-- Кнопка отмены -->
+                        <Button x:Name="CancelAttachmentButton"
+                                Grid.Column="1"
+                                Content="❌"
+                                Background="Transparent"
+                                BorderThickness="0"
+                                Foreground="Gray"
+                                FontSize="14"
+                                ToolTip="Отменить вложение"
+                                Click="CancelAttachmentButton_Click"/>
+                        
+                    </Grid>
+                </Border>
+
                 <StackPanel Orientation="Horizontal">
                     <Button x:Name="file_btn" Width="25" Height="25" Margin="5" BorderThickness="0">
                         <Image Source="paperclip.png" Width="25" Height="25"/>
@@ -309,14 +360,29 @@
                         <Image Source="emoji.png" Width="25" Height="25"/>
                     </Button>
                     <RichTextBox x:Name="MessageRichBox"
-                         AcceptsReturn="True"
-                         VerticalScrollBarVisibility="Auto"
-                         Width="482"
-                         TextChanged="MessageRichBox_TextChanged"
-                         KeyDown="MessageRichBox_KeyDown"/>
+                                 AcceptsReturn="True"
+                                 VerticalScrollBarVisibility="Auto"
+                                 Width="482"
+                                 TextChanged="MessageRichBox_TextChanged"
+                                 KeyDown="MessageRichBox_KeyDown"/>
                     <Button Content="Отправить" Click="SendMessage_Click" Width="100" Height="25" Margin="0,0,0,-2"/>
                 </StackPanel>
             </StackPanel>
+            <!-- Затенение при Drag&Drop -->
+            <Border x:Name="DropOverlay"
+             Grid.ColumnSpan="2"
+             Background="#AA000000"  
+             Visibility="Collapsed"
+             CornerRadius="0"
+             HorizontalAlignment="Stretch"
+             VerticalAlignment="Stretch"
+             MouseDown="DropOverlay_MouseDown">
+
+                <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" TextBlock.FontSize="20">
+                    <TextBlock Text="📎 Чтобы прикрепить файл" Foreground="White" HorizontalAlignment="Center"/>
+                    <TextBlock Text="перетащите его в эту область" Foreground="White" HorizontalAlignment="Center"/>
+                </StackPanel>
+            </Border>
         </Grid>
     </Grid>
 </Window>
