@@ -57,7 +57,7 @@ namespace CHATiCH
         private const string MetaPrefixReceipt = "##receipt:";
         private const string MetaPrefixState = "##state:";
         private const string MetaEscape = "##escape##";
-
+        private DateTime _lastMouseMoveTime = DateTime.MinValue;
         private TaskbarIcon _trayIcon;
 
         private DispatcherTimer _typingTimer;
@@ -70,7 +70,9 @@ namespace CHATiCH
         {
             InitializeComponent();
             this.Loaded += ChatWindow_Loaded;
-        
+            this.KeyDown += OnUserActivity;      // Добавлено: клавиатура
+            this.MouseMove += OnUserActivity;    // Добавлено: движение мыши
+            this.MouseDown += OnUserActivity;    // Добавлено: клик мыши
 
             _client = client;
             DataContext = this;
@@ -120,6 +122,39 @@ namespace CHATiCH
                 Visibility = Visibility.Visible
             };
             _trayIcon.TrayBalloonTipClicked += (s, e) => Activate();
+        }
+        private void OnUserActivity(object sender, RoutedEventArgs e)
+        {
+            _lastActivityTime = DateTime.Now;
+            CheckAndResetStatus();  // Немедленно проверяем и сбрасываем статус, если нужно
+
+            // Опционально: debounce для MouseMove (если нужно, чтобы не лагало от частых вызовов)
+            if (e is MouseEventArgs)
+            {
+                if ((DateTime.Now - _lastMouseMoveTime).TotalSeconds < 1)
+                    return;  // Игнор если <1 сек
+                _lastMouseMoveTime = DateTime.Now;
+            }
+        }
+        private void CheckAndResetStatus()
+        {
+            if (!_manualStatusSet && StatusComboBox != null)
+            {
+                var selected = StatusComboBox.SelectedItem as ComboBoxItem;
+                if (selected?.Tag?.ToString() == "Away")
+                {
+                    StatusComboBox.SelectedIndex = 0;
+                    UpdateStatus(Availability.Online, StatusMessageBox?.Text ?? "Online via WPF");
+
+                    // Обновляем свой шарик статуса, если selfContact существует
+                    string selfJid = _client.Jid.Node + "@" + _client.Jid.Domain;
+                    var selfContact = Contacts.FirstOrDefault(c => c.Jid == selfJid);
+                    if (selfContact != null)
+                    {
+                        selfContact.Availability = Availability.Online;
+                    }
+                }
+            }
         }
         private void EmojiBtn_Click(object sender, RoutedEventArgs e)
         {
@@ -453,15 +488,7 @@ namespace CHATiCH
         private void OnActivity(object sender, PreProcessInputEventArgs e)
         {
             _lastActivityTime = DateTime.Now;
-            if (!_manualStatusSet && StatusComboBox != null)
-            {
-                var selected = StatusComboBox.SelectedItem as ComboBoxItem;
-                if (selected?.Tag?.ToString() == "Away")
-                {
-                    StatusComboBox.SelectedIndex = 0;
-                    UpdateStatus(Availability.Online, StatusMessageBox?.Text ?? "Online via WPF");
-                }
-            }
+            CheckAndResetStatus();  // Добавлено: вызов сброса
         }
 
         private void StatusTimer_Tick(object sender, EventArgs e)
@@ -481,19 +508,12 @@ namespace CHATiCH
                             StatusComboBox.SelectedIndex = 1;
                             UpdateStatus(Availability.Away, StatusMessageBox?.Text ?? "Отошел");
                             if (selfContact != null)
-                                selfContact.Availability = Availability.Away; // меняем цвет шарика
+                                selfContact.Availability = Availability.Away;
                         }
                     }
                     else
                     {
-                        var sel = StatusComboBox?.SelectedItem as ComboBoxItem;
-                        if (sel?.Tag?.ToString() == "Away")
-                        {
-                            StatusComboBox.SelectedIndex = 0;
-                            UpdateStatus(Availability.Online, StatusMessageBox?.Text ?? "Online via WPF");
-                            if (selfContact != null)
-                                selfContact.Availability = Availability.Online; // меняем цвет шарика
-                        }
+                        CheckAndResetStatus();  // Добавлено: используем общий метод для сброса
                     }
                 }
 
@@ -785,7 +805,7 @@ namespace CHATiCH
                             if (tab.Content is ObservableCollection<ChatMessage> list)
                             {
                                 var msg = list.FirstOrDefault(m => m.Id == editId);
-                                if (msg != null)
+                                if (msg != null && msg.Author != "Я")  // Только для чужих сообщений (не "Я")
                                 {
                                     msg.Text = newText;
                                     msg.IsEdited = true;
@@ -919,6 +939,12 @@ namespace CHATiCH
             if (sender is MenuItem menuItem &&
                 menuItem.DataContext is ChatMessage message)
             {
+                if (message.Author != "Я")
+                {
+                    MessageBox.Show("Нельзя редактировать сообщения собеседника!");
+                    return;
+                }
+
                 if ((DateTime.Now - message.Time).TotalMinutes > 3)
                 {
                     MessageBox.Show("Редактирование сообщений разрешено только в течение 3 минут после отправки.");
@@ -1532,19 +1558,19 @@ namespace CHATiCH
 
         private void SearchTextBox_TextChanged(object sender, TextChangedEventArgs e)
         {
-            var view = CollectionViewSource.GetDefaultView(Contacts);
-            view.Filter = o =>
+            string search = SearchTextBox.Text?.Trim().ToLower() ?? "";
+
+            foreach (var group in ContactGroups)
             {
-                if (o is UserContact contact)
+                foreach (var contact in group.Contacts)
                 {
-                    string search = SearchTextBox.Text.ToLower();
-                    return string.IsNullOrEmpty(search) ||
-                           contact.Name.ToLower().Contains(search) ||
-                           contact.Jid.ToLower().Contains(search);
+                    contact.IsVisible = string.IsNullOrEmpty(search)
+                        || contact.Name.ToLower().Contains(search)
+                        || contact.Jid.ToLower().Contains(search);
                 }
-                return false;
-            };
+            }
         }
+
     }
 
     public class ChatTab : INotifyPropertyChanged
@@ -1617,6 +1643,18 @@ namespace CHATiCH
         public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
         {
             return new Uri(AppDomain.CurrentDomain.BaseDirectory); // Base dir for Emoji/
+        }
+
+        public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
+        {
+            throw new NotImplementedException();
+        }
+    }
+    public class AuthorToVisibilityConverter : IValueConverter
+    {
+        public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
+        {
+            return (value is string author && author == "Я") ? Visibility.Visible : Visibility.Collapsed;
         }
 
         public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
