@@ -9,7 +9,7 @@ using System.Windows.Controls;
 using System.Windows.Data;
 using System.Windows.Input;
 using System.Windows.Media.Imaging;
-using System.Windows.Documents; // Добавлен для RichTextBox и InlineUIContainer
+using System.Windows.Documents;
 using System.Windows.Threading;
 using Hardcodet.Wpf.TaskbarNotification;
 using S22.Xmpp;
@@ -40,7 +40,7 @@ namespace CHATiCH
         private string _selectedFilePath;
         private int _dragDepth = 0;
         private bool _isDraggingFile = false;
-
+        private bool _isAutomaticChange = false;
         public Uri BaseUri { get; } = new Uri(AppDomain.CurrentDomain.BaseDirectory);
         public ObservableCollection<UserContact> Contacts { get; set; } = new ObservableCollection<UserContact>();
         public ObservableCollection<ChatTab> ChatTabsItems { get; set; } = new ObservableCollection<ChatTab>();
@@ -143,6 +143,7 @@ namespace CHATiCH
                 var selected = StatusComboBox.SelectedItem as ComboBoxItem;
                 if (selected?.Tag?.ToString() == "Away")
                 {
+                    _isAutomaticChange = true;  // Устанавливаем флаг перед изменением
                     StatusComboBox.SelectedIndex = 0;
                     UpdateStatus(Availability.Online, StatusMessageBox?.Text ?? "Online via WPF");
 
@@ -505,6 +506,7 @@ namespace CHATiCH
                     {
                         if (StatusComboBox?.SelectedIndex != 1)
                         {
+                            _isAutomaticChange = true;  // Устанавливаем флаг перед изменением
                             StatusComboBox.SelectedIndex = 1;
                             UpdateStatus(Availability.Away, StatusMessageBox?.Text ?? "Отошел");
                             if (selfContact != null)
@@ -513,7 +515,7 @@ namespace CHATiCH
                     }
                     else
                     {
-                        CheckAndResetStatus();  // Добавлено: используем общий метод для сброса
+                        CheckAndResetStatus();
                     }
                 }
 
@@ -1410,7 +1412,6 @@ namespace CHATiCH
                 availability = Availability.Away;
             else
                 availability = Availability.Online;
-            ;
 
             // обновляем статус в XMPP
             UpdateStatus(availability, StatusMessageBox?.Text ?? "");
@@ -1423,7 +1424,14 @@ namespace CHATiCH
                 selfContact.Availability = availability;
             }
 
-            _manualStatusSet = true;
+            if (_isAutomaticChange)
+            {
+                _isAutomaticChange = false;  // Сбрасываем флаг после автоматического изменения
+            }
+            else
+            {
+                _manualStatusSet = true;  // Устанавливаем только для ручных изменений
+            }
         }
 
 
