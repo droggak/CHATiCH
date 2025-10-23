@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
+using System.Linq;
 using System.Windows.Media;
 
 namespace CHATiCH
@@ -93,6 +94,24 @@ namespace CHATiCH
                     OnPropertyChanged(nameof(Status));
                     OnPropertyChanged(nameof(ReceiptText));
                 }
+            }
+        }
+        public string FileType
+        {
+            get
+            {
+                if (string.IsNullOrEmpty(FileName))
+                    return "other";
+
+                string ext = System.IO.Path.GetExtension(FileName).ToLower();
+
+                if (new[] { ".png", ".jpg", ".jpeg", ".gif", ".bmp" }.Contains(ext)) return "Картинка";
+                if (new[] { ".mp4", ".avi", ".mov", ".mkv" }.Contains(ext)) return "Видео";
+                if (new[] { ".mp3", ".wav", ".flac" }.Contains(ext)) return "Аудио";
+                if (new[] { ".doc", ".docx", ".pdf", ".xls", ".xlsx", ".txt" }.Contains(ext)) return "Документ";
+                if (new[] { ".zip", ".rar", ".7z" }.Contains(ext)) return "Архив";
+
+                return "Другой";
             }
         }
 

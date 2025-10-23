@@ -189,6 +189,9 @@
       <SubType>Designer</SubType>
     </ApplicationDefinition>
     <Compile Include="AppConfig.cs" />
+    <Compile Include="AttachmentsWindow.xaml.cs">
+      <DependentUpon>AttachmentsWindow.xaml</DependentUpon>
+    </Compile>
     <Compile Include="AutoScrollBehavior.cs" />
     <Compile Include="BoolToVisibilityConverter.cs" />
     <Compile Include="ChatMessage.cs" />
@@ -205,6 +208,10 @@
       <DependentUpon>SelectContactWindow.xaml</DependentUpon>
     </Compile>
     <Compile Include="UserContact.cs" />
+    <Page Include="AttachmentsWindow.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
     <Page Include="ChatWindow.xaml">
       <Generator>MSBuild:Compile</Generator>
       <SubType>Designer</SubType>

@@ -4,34 +4,61 @@
         Title="История сообщений" Height="500" Width="800">
     <Grid Margin="5">
         <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="200"/>
+            <ColumnDefinition Width="220"/>
             <ColumnDefinition Width="*"/>
         </Grid.ColumnDefinitions>
 
-        <!-- Список дат -->
+        <!-- Левая колонка: календарь и фильтры -->
         <DockPanel Grid.Column="0" Margin="5">
-            <Button DockPanel.Dock="Bottom" Content="Export" Click="Export_Click" Margin="0,5,0,0"/>
-            <ListBox x:Name="DatesList"
-                     SelectionChanged="DatesList_SelectionChanged"/>
+            <StackPanel DockPanel.Dock="Top" Margin="0,0,0,10">
+                <Label Content="Выберите дату:"/>
+                <Calendar x:Name="DateCalendar"
+          SelectedDatesChanged="DateCalendar_SelectedDatesChanged"
+          Margin="0,0,0,10"/>
+
+
+                <Label Content="Тип сообщений:"/>
+                <ComboBox x:Name="TypeFilter"
+                          SelectionChanged="TypeFilter_SelectionChanged">
+                    <ComboBoxItem Content="Все" Tag="all" IsSelected="True"/>
+                    <ComboBoxItem Content="Входящие" Tag="incoming"/>
+                    <ComboBoxItem Content="Исходящие" Tag="outgoing"/>
+                </ComboBox>
+            </StackPanel>
+            <Button DockPanel.Dock="Bottom" Content="Экспорт"
+                    Click="Export_Click" Height="29" Width="159" VerticalAlignment="Top" HorizontalAlignment="Center"/>
         </DockPanel>
 
-        <!-- Сообщения -->
+        <!-- Правая колонка: список сообщений -->
         <ListBox Grid.Column="1"
-                 ItemsSource="{Binding Messages}"
+                 x:Name="MessagesList"
+                 ItemsSource="{Binding FilteredMessages}"
                  Margin="5"
                  BorderThickness="0"
                  Background="White">
             <ListBox.ItemTemplate>
                 <DataTemplate>
-                    <StackPanel Orientation="Vertical" Margin="0,2">
-                        <TextBlock FontWeight="Bold" Text="{Binding Author}"/>
-                        <TextBlock Text="{Binding Text}" TextWrapping="Wrap"/>
-                        <TextBlock Text="{Binding Time, StringFormat='{}{0:dd.MM.yyyy HH:mm}'}"
-                                   FontSize="10" Foreground="Gray"
-                                   HorizontalAlignment="Right"/>
-                    </StackPanel>
+                    <Border BorderBrush="#DDD" BorderThickness="0,0,0,1" Padding="5">
+                        <StackPanel Orientation="Vertical">
+                            <TextBlock FontWeight="Bold" Text="{Binding Author}"/>
+                            <TextBlock Text="{Binding Text}" TextWrapping="Wrap" Margin="0,2,0,2"/>
+                            <TextBlock Text="{Binding Time, StringFormat='{}{0:dd.MM.yyyy HH:mm}'}"
+                                       FontSize="10" Foreground="Gray"
+                                       HorizontalAlignment="Right"/>
+                        </StackPanel>
+                    </Border>
                 </DataTemplate>
             </ListBox.ItemTemplate>
         </ListBox>
+
+        <!-- Текст при пустом списке -->
+        <TextBlock x:Name="EmptyLabel"
+                   Grid.Column="1"
+                   HorizontalAlignment="Center"
+                   VerticalAlignment="Center"
+                   FontStyle="Italic"
+                   Foreground="Gray"
+                   Text="Нет сообщений для выбранных условий."
+                   Visibility="Collapsed"/>
     </Grid>
 </Window>

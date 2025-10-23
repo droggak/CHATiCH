@@ -1,0 +1,49 @@
+﻿<Window x:Class="CHATiCH.AttachmentsWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Вложения" Height="500" Width="700" ResizeMode="CanResize">
+    <Grid Margin="10">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+
+        <!-- Панель фильтров -->
+        <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
+            <Label Content="Дата:" VerticalAlignment="Center"/>
+            <DatePicker x:Name="DateFilter" Width="150" SelectedDateChanged="DateFilter_SelectedDateChanged"/>
+            <Label Content="Тип:" Margin="10,0,0,0" VerticalAlignment="Center"/>
+            <ComboBox x:Name="TypeFilter" Width="150" SelectionChanged="TypeFilter_SelectionChanged">
+                <ComboBoxItem Content="Все" Tag="all" IsSelected="True"/>
+                <ComboBoxItem Content="Фото" Tag="image"/>
+                <ComboBoxItem Content="Видео" Tag="video"/>
+                <ComboBoxItem Content="Музыка" Tag="audio"/>
+                <ComboBoxItem Content="Документы" Tag="doc"/>
+                <ComboBoxItem Content="Архивы" Tag="archive"/>
+                <ComboBoxItem Content="Другое" Tag="other"/>
+            </ComboBox>
+        </StackPanel>
+
+        <!-- Список вложений -->
+        <ListView x:Name="AttachmentsList" Grid.Row="1">
+            <ListView.View>
+                <GridView>
+                    <GridViewColumn Header="Имя файла" Width="250" DisplayMemberBinding="{Binding FileName}" />
+                    <GridViewColumn Header="Тип" Width="100" DisplayMemberBinding="{Binding FileType}" />
+                    <GridViewColumn Header="Дата" Width="120" DisplayMemberBinding="{Binding Time, StringFormat=dd.MM.yyyy HH:mm}" />
+                    <GridViewColumn Header="Ссылка">
+                        <GridViewColumn.CellTemplate>
+                            <DataTemplate>
+                                <TextBlock>
+                                    <Hyperlink NavigateUri="{Binding FileUrl}" RequestNavigate="Hyperlink_RequestNavigate">
+                                        Открыть
+                                    </Hyperlink>
+                                </TextBlock>
+                            </DataTemplate>
+                        </GridViewColumn.CellTemplate>
+                    </GridViewColumn>
+                </GridView>
+            </ListView.View>
+        </ListView>
+    </Grid>
+</Window>

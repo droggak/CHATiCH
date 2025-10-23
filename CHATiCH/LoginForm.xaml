@@ -3,41 +3,75 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="Login" Height="507" Width="350"
         WindowStartupLocation="CenterScreen"
-        Background="#F9F9F9">
+        Background="#F0F0F0">
+
+    <Window.Resources>
+        <DropShadowEffect x:Key="DropShadowEffect" Color="#AAAAAA" BlurRadius="8" ShadowDepth="3" Opacity="0.5"/>
+
+        <Style TargetType="TextBox">
+            <Setter Property="Height" Value="30"/>
+            <Setter Property="Padding" Value="10,5,10,5"/>
+            <Setter Property="BorderBrush" Value="#CCCCCC"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Background" Value="White"/>
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="BorderBrush" Value="#007BFF"/>
+                    <Setter Property="Effect" Value="{StaticResource DropShadowEffect}"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+
+        <Style TargetType="PasswordBox">
+            <Setter Property="Height" Value="30"/>
+            <Setter Property="Padding" Value="10,5,10,5"/>
+            <Setter Property="BorderBrush" Value="#CCCCCC"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Background" Value="White"/>
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="BorderBrush" Value="#007BFF"/>
+                    <Setter Property="Effect" Value="{StaticResource DropShadowEffect}"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+
+        <Style TargetType="CheckBox">
+            <Setter Property="Foreground" Value="#555555"/>
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Foreground" Value="#007BFF"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+    </Window.Resources>
+
     <Grid Margin="0,0,0,26">
-        <Border CornerRadius="10" Background="White" Padding="20" Margin="20,20,20,0" 
+        <Border CornerRadius="5" Background="White" Padding="20" Margin="20,20,20,0" 
                 Effect="{DynamicResource DropShadowEffect}">
             <StackPanel>
                 <TextBlock Text="Login" FontSize="24" FontWeight="Bold" 
-                           HorizontalAlignment="Center" Margin="0,0,0,20"/>
+                           HorizontalAlignment="Center" Margin="0,0,0,20" Foreground="#333333"/>
 
-                <TextBlock Text="Username" FontWeight="SemiBold" Margin="0,0,0,5"/>
-                <TextBox x:Name="txtUsername" Height="30" 
-                         Padding="5" BorderBrush="#DDD" BorderThickness="1" 
-                         Background="#FFF" />
+                <TextBlock Text="Username" FontWeight="SemiBold" Margin="0,0,0,5" Foreground="#555555"/>
+                <TextBox x:Name="txtUsername" />
 
-                <TextBlock Text="Password" FontWeight="SemiBold" Margin="10,10,0,5"/>
-                <PasswordBox x:Name="txtPassword" Height="30" 
-                             Padding="5" BorderBrush="#DDD" BorderThickness="1" 
-                             Background="#FFF" />
+                <TextBlock Text="Password" FontWeight="SemiBold" Margin="0,15,0,5" Foreground="#555555"/>
+                <PasswordBox x:Name="txtPassword" />
 
-                <TextBlock Text="Domain" FontWeight="SemiBold" Margin="10,10,0,5"/>
-                <TextBox x:Name="txtDomain" Height="30" Text="win-m4f2mfrj6i4.vkr.loc"
-                         Padding="5" BorderBrush="#DDD" BorderThickness="1" 
-                         Background="#FFF" />
-                <CheckBox x:Name="chkRememberMe"
-              Content="Запомнить меня"
-              Margin="0,10,0,0"/>
+                <TextBlock Text="Domain" FontWeight="SemiBold" Margin="0,15,0,5" Foreground="#555555"/>
+                <TextBox x:Name="txtDomain" Text="win-m4f2mfrj6i4.vkr.loc" />
 
-                <CheckBox x:Name="chkRememberPassword"
-              Content="Запомнить пароль (небезопасно)"
-              Margin="0,5,0,0"/>
+                <CheckBox x:Name="chkRememberMe" Content="Запомнить меня" Margin="0,15,0,0" />
+
+                <CheckBox x:Name="chkRememberPassword" Content="Запомнить пароль (небезопасно)" Margin="0,5,0,0" />
+
                 <Button Content="Login" Click="BtnLogin_Click" Height="35" 
-                        Margin="0,20,0,0" Background="#4CAF50" Foreground="White" 
-                        FontWeight="Bold" BorderThickness="0" Cursor="Hand">
+                        Margin="0,20,0,0" Background="#007BFF" Foreground="White" 
+                        FontWeight="Bold" BorderThickness="0" Cursor="Hand" IsDefault="True">
                     <Button.Style>
                         <Style TargetType="Button">
-                            <Setter Property="Background" Value="#4CAF50"/>
+                            <Setter Property="Background" Value="#007BFF"/>
                             <Setter Property="Foreground" Value="White"/>
                             <Setter Property="Template">
                                 <Setter.Value>
@@ -52,10 +86,12 @@
                             </Setter>
                             <Style.Triggers>
                                 <Trigger Property="IsMouseOver" Value="True">
-                                    <Setter Property="Background" Value="#45A049"/>
+                                    <Setter Property="Background" Value="#0056B3"/>
+                                    <Setter Property="Effect" Value="{StaticResource DropShadowEffect}"/>
                                 </Trigger>
                                 <Trigger Property="IsPressed" Value="True">
-                                    <Setter Property="Background" Value="#3E8E41"/>
+                                    <Setter Property="Background" Value="#004085"/>
+                                    <Setter Property="Effect" Value="{StaticResource DropShadowEffect}"/>
                                 </Trigger>
                             </Style.Triggers>
                         </Style>
@@ -64,8 +100,4 @@
             </StackPanel>
         </Border>
     </Grid>
-
-    <Window.Resources>
-        <DropShadowEffect x:Key="DropShadowEffect" Color="#888" BlurRadius="10" ShadowDepth="3"/>
-    </Window.Resources>
 </Window>

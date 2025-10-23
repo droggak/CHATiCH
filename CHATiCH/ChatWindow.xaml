@@ -259,6 +259,7 @@
                             <StackPanel.ContextMenu>
                                 <ContextMenu>
                                     <MenuItem Header="История" Click="OpenHistory_Click"/>
+                                    <MenuItem Header="Вложения" Click="OpenAttachments_Click"/>
                                 </ContextMenu>
                             </StackPanel.ContextMenu>
 

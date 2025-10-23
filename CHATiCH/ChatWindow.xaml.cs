@@ -1434,6 +1434,31 @@ namespace CHATiCH
             }
         }
 
+        private void OpenAttachments_Click(object sender, RoutedEventArgs e)
+        {
+            if (ChatTabs.SelectedItem is ChatTab tab)
+            {
+                // ⚙️ Получаем JID из вкладки
+                var jid = tab.Jid;
+                if (string.IsNullOrEmpty(jid))
+                {
+                    MessageBox.Show("Не удалось определить пользователя.", "Ошибка", MessageBoxButton.OK, MessageBoxImage.Warning);
+                    return;
+                }
+
+                // 🧩 Открываем окно вложений по JID
+                var win = new AttachmentsWindow(jid);
+                win.Owner = this;
+                win.Show();
+            }
+            else
+            {
+                MessageBox.Show("Не выбран активный чат.", "Ошибка", MessageBoxButton.OK, MessageBoxImage.Warning);
+            }
+        }
+
+
+
 
         private void StatusMessageBox_LostFocus(object sender, RoutedEventArgs e)
         {
