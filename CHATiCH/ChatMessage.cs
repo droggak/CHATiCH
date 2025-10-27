@@ -105,13 +105,13 @@ namespace CHATiCH
 
                 string ext = System.IO.Path.GetExtension(FileName).ToLower();
 
-                if (new[] { ".png", ".jpg", ".jpeg", ".gif", ".bmp" }.Contains(ext)) return "Картинка";
-                if (new[] { ".mp4", ".avi", ".mov", ".mkv" }.Contains(ext)) return "Видео";
-                if (new[] { ".mp3", ".wav", ".flac" }.Contains(ext)) return "Аудио";
-                if (new[] { ".doc", ".docx", ".pdf", ".xls", ".xlsx", ".txt" }.Contains(ext)) return "Документ";
-                if (new[] { ".zip", ".rar", ".7z" }.Contains(ext)) return "Архив";
+                if (new[] { ".png", ".jpg", ".jpeg", ".gif", ".bmp" }.Contains(ext)) return "image";
+                if (new[] { ".mp4", ".avi", ".mov", ".mkv" }.Contains(ext)) return "video";
+                if (new[] { ".mp3", ".wav", ".flac" }.Contains(ext)) return "audio";
+                if (new[] { ".doc", ".docx", ".pdf", ".xls", ".xlsx", ".txt" }.Contains(ext)) return "doc";
+                if (new[] { ".zip", ".rar", ".7z" }.Contains(ext)) return "archive";
 
-                return "Другой";
+                return "other";
             }
         }
 

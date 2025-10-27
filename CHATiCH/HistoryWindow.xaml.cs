@@ -22,52 +22,61 @@ namespace CHATiCH
         {
             InitializeComponent();
 
-            // 🔹 Инициализация с защитой
             Jid = jid ?? string.Empty;
             _allMessages = new ObservableCollection<ChatMessage>();
             FilteredMessages = new ObservableCollection<ChatMessage>();
             DataContext = this;
         }
 
-        // 🔹 Обработчик выбора даты
         private void DateCalendar_SelectedDatesChanged(object sender, SelectionChangedEventArgs e)
         {
             ApplyFilters();
         }
 
-        // 🔹 Обработчик выбора типа сообщений
         private void TypeFilter_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {
             ApplyFilters();
         }
 
-        // 🔹 Фильтрация по дате и типу
+        private void SearchBox_TextChanged(object sender, TextChangedEventArgs e)
+        {
+            ApplyFilters();
+        }
+
         private void ApplyFilters()
         {
             try
             {
-                if (DateCalendar == null || TypeFilter == null)
-                    return;
-
+                // 🔒 Безопасность — проверяем элементы
                 if (FilteredMessages == null)
                     FilteredMessages = new ObservableCollection<ChatMessage>();
 
+                if (DateCalendar == null || TypeFilter == null)
+                    return;
+
+                FilteredMessages.Clear();
+
+                // 🗓 Без выбранной даты — просто очищаем
                 if (DateCalendar.SelectedDate == null)
                 {
-                    FilteredMessages.Clear();
                     UpdateEmptyLabel();
                     return;
                 }
 
                 DateTime selectedDate = DateCalendar.SelectedDate.Value;
 
-                // Тип сообщений
+                // 📤 Тип сообщений
                 string type = "all";
                 var selectedItem = TypeFilter.SelectedItem as ComboBoxItem;
                 if (selectedItem != null && selectedItem.Tag != null)
                     type = selectedItem.Tag.ToString();
 
-                // Загрузка истории
+                // 🔍 Поисковый запрос
+                string search = string.Empty;
+                if (SearchBox != null && !string.IsNullOrWhiteSpace(SearchBox.Text))
+                    search = SearchBox.Text.Trim().ToLower();
+
+                // 💾 Загружаем историю
                 var hist = HistoryManager.LoadHistory(Jid, selectedDate);
                 if (hist == null)
                     hist = new ObservableCollection<ChatMessage>();
@@ -76,21 +85,25 @@ namespace CHATiCH
                 foreach (var msg in hist)
                     _allMessages.Add(msg);
 
+                // 🎯 Применяем фильтры
                 var filtered = _allMessages.Where(m =>
                 {
                     if (m == null)
                         return false;
 
-                    bool matchType = true;
-                    if (type == "incoming")
-                        matchType = m.IsIncoming;
-                    else if (type == "outgoing")
-                        matchType = !m.IsIncoming;
+                    bool matchType =
+                        type == "all" ||
+                        (type == "incoming" && m.IsIncoming) ||
+                        (type == "outgoing" && !m.IsIncoming);
 
-                    return matchType;
+                    bool matchSearch =
+                        string.IsNullOrEmpty(search) ||
+                        (m.Text != null && m.Text.ToLower().Contains(search)) ||
+                        (m.Author != null && m.Author.ToLower().Contains(search));
+
+                    return matchType && matchSearch;
                 }).ToList();
 
-                FilteredMessages.Clear();
                 foreach (var msg in filtered)
                     FilteredMessages.Add(msg);
 
@@ -98,12 +111,12 @@ namespace CHATiCH
             }
             catch (Exception ex)
             {
-                MessageBox.Show("Ошибка при загрузке истории:\n" + ex.Message,
+                MessageBox.Show("Ошибка при фильтрации истории:\n" + ex.Message,
                     "Ошибка", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
 
-        // 🔹 Обновление надписи о пустом списке
+
         private void UpdateEmptyLabel()
         {
             if (EmptyLabel == null)
@@ -115,7 +128,7 @@ namespace CHATiCH
                 EmptyLabel.Visibility = Visibility.Collapsed;
         }
 
-        // 🔹 Экспорт сообщений
+
         private void Export_Click(object sender, RoutedEventArgs e)
         {
             try
@@ -132,36 +145,86 @@ namespace CHATiCH
                     Filter = "Text file (*.txt)|*.txt|PDF file (*.pdf)|*.pdf"
                 };
 
-                bool? result = dialog.ShowDialog();
-                if (result == true)
+                if (dialog.ShowDialog() != true)
+                    return;
+
+                // 🔧 Преобразование текста (ссылки и эмодзи)
+                Func<string, string> normalizeText = (text) =>
                 {
-                    if (dialog.FileName.EndsWith(".txt"))
+                    if (string.IsNullOrEmpty(text))
+                        return string.Empty;
+
+                    string processed = text;
+
+                    // 🧩 заменяем эмодзи
+                    processed = System.Text.RegularExpressions.Regex.Replace(
+                        processed,
+                        @"[\uD800-\uDBFF][\uDC00-\uDFFF]",
+                        "[эмодзи]"
+                    );
+
+                    // 🔗 заменяем ссылки
+                    processed = System.Text.RegularExpressions.Regex.Replace(
+                        processed,
+                        @"(https?://[^\s]+)",
+                        "[файл: $1]"
+                    );
+
+                    return processed;
+                };
+
+                // 📝 Экспорт в TXT
+                if (dialog.FileName.EndsWith(".txt"))
+                {
+                    using (var writer = new StreamWriter(dialog.FileName, false, System.Text.Encoding.UTF8))
                     {
-                        string content = string.Join(Environment.NewLine,
-                            FilteredMessages.Select(m =>
-                                string.Format("{0:dd.MM.yyyy HH:mm} | {1}: {2}",
-                                m.Time, m.Author, m.Text))
-                        );
-                        File.WriteAllText(dialog.FileName, content);
-                    }
-                    else if (dialog.FileName.EndsWith(".pdf"))
-                    {
-                        using (var writer = new PdfWriter(dialog.FileName))
-                        using (var pdf = new PdfDocument(writer))
-                        using (var doc = new Document(pdf))
+                        foreach (var msg in FilteredMessages)
                         {
-                            foreach (var msg in FilteredMessages)
-                            {
-                                string line = string.Format("{0:dd.MM.yyyy HH:mm} | {1}: {2}",
-                                    msg.Time, msg.Author, msg.Text);
-                                doc.Add(new Paragraph(line));
-                            }
+                            string safeText = normalizeText(msg.Text);
+                            writer.WriteLine($"{msg.Time:dd.MM.yyyy HH:mm} | {msg.Author}: {safeText}");
                         }
                     }
-
-                    MessageBox.Show("Экспорт завершён!",
-                        "Успех", MessageBoxButton.OK, MessageBoxImage.Information);
                 }
+
+                // 📄 Экспорт в PDF
+                else if (dialog.FileName.EndsWith(".pdf"))
+                {
+                    using (var writer = new PdfWriter(dialog.FileName))
+                    using (var pdf = new PdfDocument(writer))
+                    using (var doc = new Document(pdf))
+                    {
+                        // ✅ Создаём базовые шрифты без третьего аргумента (старый синтаксис)
+                        var fontNormal = iText.Kernel.Font.PdfFontFactory.CreateFont(
+                            iText.IO.Font.Constants.StandardFonts.HELVETICA,
+                            iText.IO.Font.PdfEncodings.WINANSI);
+                        var fontBold = iText.Kernel.Font.PdfFontFactory.CreateFont(
+                            iText.IO.Font.Constants.StandardFonts.HELVETICA_BOLD,
+                            iText.IO.Font.PdfEncodings.WINANSI);
+
+                        doc.SetFont(fontNormal);
+                        doc.SetFontSize(11);
+
+                        foreach (var msg in FilteredMessages)
+                        {
+                            string header = $"{msg.Time:dd.MM.yyyy HH:mm} | {msg.Author}:";
+                            string safeText = normalizeText(msg.Text);
+
+                            // 🧾 Заголовок (жирный)
+                            var headerPara = new Paragraph(header).SetFont(fontBold);
+                            doc.Add(headerPara);
+
+                            // ✏️ Текст
+                            var textPara = new Paragraph(safeText).SetFont(fontNormal);
+                            doc.Add(textPara);
+
+                            // 🔹 Отступ между сообщениями
+                            doc.Add(new Paragraph("\n"));
+                        }
+                    }
+                }
+
+                MessageBox.Show("Экспорт завершён!",
+                    "Успех", MessageBoxButton.OK, MessageBoxImage.Information);
             }
             catch (Exception ex)
             {
@@ -169,5 +232,8 @@ namespace CHATiCH
                     "Ошибка", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
+
+
+
     }
 }
