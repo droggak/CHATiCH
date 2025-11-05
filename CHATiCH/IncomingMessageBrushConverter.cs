@@ -8,12 +8,18 @@ namespace CHATiCH
     public class IncomingMessageBrushConverter : IValueConverter
     {
         // isIncoming = true => входящее сообщение (серое)
-        // isIncoming = false => исходящее сообщение (голубое)
+        // isIncoming = false => исходящее сообщение (темно-серое)
         public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
         {
             if (value is bool isIncoming)
-                return isIncoming ? Brushes.LightGray : Brushes.LightBlue;
-            return Brushes.White;
+            {
+                // Используем стандартные кисти WPF:
+                // Входящее: LightGray/Gray (для фона)
+                // Исходящее: DarkGray/Black (для фона)
+                return isIncoming ? Brushes.SlateGray : Brushes.LightSlateGray;
+            }
+
+            return Brushes.Transparent; // Используем Transparent вместо White
         }
 
         public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)

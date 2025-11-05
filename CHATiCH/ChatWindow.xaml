@@ -5,15 +5,24 @@
         xmlns:i="http://schemas.microsoft.com/xaml/behaviors"
         xmlns:md="clr-namespace:MdXaml;assembly=MdXaml"
         Title="Чат" Height="600" Width="900"
-        AllowDrop="True"
-        DragEnter="Window_DragEnter"
-        DragOver="Window_DragOver"
-        DragLeave="Window_DragLeave"
-        Drop="Window_Drop">
-        
+        WindowStartupLocation="CenterScreen"
+        Background="#F7F9FC">
 
     <Window.Resources>
-        <!-- Конвертеры -->
+        <SolidColorBrush x:Key="WindowBackgroundBrush" Color="#F7F9FC"/>
+        <SolidColorBrush x:Key="PanelBackgroundBrush" Color="#FFFFFF"/>
+        <SolidColorBrush x:Key="PrimaryAccentBrush" Color="#4A90E2"/>
+        <SolidColorBrush x:Key="PrimaryAccentHoverBrush" Color="#357ABD"/>
+        <SolidColorBrush x:Key="PrimaryAccentPressedBrush" Color="#2A5D9F"/>
+        <SolidColorBrush x:Key="TextHeaderBrush" Color="#333333"/>
+        <SolidColorBrush x:Key="TextBodyBrush" Color="#555555"/>
+        <SolidColorBrush x:Key="BorderLightBrush" Color="#CCCCCC"/>
+        <SolidColorBrush x:Key="BorderLighterBrush" Color="#E0E0E0"/>
+        <SolidColorBrush x:Key="IncomingMessageBackgroundBrush" Color="#E4E6EB"/>
+        
+
+        <DropShadowEffect x:Key="DropShadowEffect" Color="#888888" BlurRadius="10" ShadowDepth="3" Opacity="0.3"/>
+
         <local:LinkExtractor x:Key="LinkExtractor"/>
         <local:LinkTextExtractor x:Key="LinkTextExtractor"/>
         <local:IncomingMessageBrushConverter x:Key="IncomingMessageBrushConverter"/>
@@ -22,16 +31,12 @@
         <local:AuthorToVisibilityConverter x:Key="AuthorToVisibilityConverter"/>
 
         <Style TargetType="ProgressBar" x:Key="ModernProgressBar">
-            <Setter Property="Foreground" Value="#4CAF50"/>
-            <Setter Property="Background" Value="#E0E0E0"/>
+            <Setter Property="Foreground" Value="{StaticResource PrimaryAccentBrush}"/>
+            <Setter Property="Background" Value="{StaticResource BorderLighterBrush}"/>
             <Setter Property="Height" Value="6"/>
             <Setter Property="BorderThickness" Value="0"/>
-            
         </Style>
 
-
-
-        <!-- Стиль для MarkdownScrollViewer -->
         <Style x:Key="MarkdownStyle" TargetType="md:MarkdownScrollViewer">
             <Style.Resources>
                 <Style TargetType="Image">
@@ -41,86 +46,464 @@
             </Style.Resources>
         </Style>
 
-        <!-- Сообщения-ссылки -->
-        <DataTemplate x:Key="FileLinkTemplate" DataType="{x:Type local:ChatMessage}">
-            <Border CornerRadius="10" Padding="5" Margin="3"
-            Background="{Binding IsIncoming, Converter={StaticResource IncomingMessageBrushConverter}}">
-                <StackPanel>
-                    <!-- Автор -->
-                    <TextBlock Text="{Binding Author}" FontWeight="Bold" />
+        <Style x:Key="PanelCardStyle" TargetType="Border">
+            <Setter Property="Background" Value="{StaticResource PanelBackgroundBrush}"/>
+            <Setter Property="CornerRadius" Value="8"/>
+            <Setter Property="Effect" Value="{StaticResource DropShadowEffect}"/>
+        </Style>
 
-                    <!-- Ссылка на файл -->
-                    <TextBlock>
+        <Style x:Key="ModernComboBoxItem" TargetType="ComboBoxItem">
+            <Setter Property="Padding" Value="8,5"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ComboBoxItem">
+                        <Border x:Name="Bd"
+                                Padding="{TemplateBinding Padding}"
+                                Background="{TemplateBinding Background}"
+                                BorderThickness="0">
+                            <ContentPresenter HorizontalAlignment="Left" VerticalAlignment="Center" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="{StaticResource BorderLighterBrush}"/>
+                            </Trigger>
+                            <Trigger Property="IsSelected" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="{StaticResource PrimaryAccentBrush}"/>
+                                <Setter Property="Foreground" Value="White"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="ModernComboBox" TargetType="ComboBox">
+            <Setter Property="Background" Value="{StaticResource PanelBackgroundBrush}"/>
+            <Setter Property="BorderBrush" Value="{StaticResource BorderLightBrush}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Foreground" Value="{StaticResource TextBodyBrush}"/>
+            <Setter Property="Padding" Value="8,5"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+            <Setter Property="ItemContainerStyle" Value="{StaticResource ModernComboBoxItem}"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ComboBox">
+                        <Grid>
+                            <ToggleButton x:Name="ToggleButton" Grid.Column="2" 
+                                          ClickMode="Press" Focusable="false" 
+                                          IsChecked="{Binding IsDropDownOpen, Mode=TwoWay, RelativeSource={RelativeSource TemplatedParent}}">
+                                <ToggleButton.Template>
+                                    <ControlTemplate TargetType="ToggleButton">
+                                        <Border x:Name="Border" CornerRadius="6" 
+                                                Background="{TemplateBinding Background}"
+                                                BorderBrush="{TemplateBinding BorderBrush}"
+                                                BorderThickness="{TemplateBinding BorderThickness}">
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="15"/>
+                                                </Grid.ColumnDefinitions>
+                                                <ContentPresenter Margin="{TemplateBinding Padding}" 
+                                                                  HorizontalAlignment="Left" VerticalAlignment="Center" />
+                                                <Path x:Name="Arrow" Grid.Column="1"
+                                                      Data="M 0 0 L 4 4 L 8 0 Z" 
+                                                      StrokeThickness="1" Fill="{StaticResource TextBodyBrush}"
+                                                      HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                            </Grid>
+                                        </Border>
+                                        <ControlTemplate.Triggers>
+                                            <Trigger Property="IsMouseOver" Value="True">
+                                                <Setter TargetName="Border" Property="BorderBrush" Value="{StaticResource PrimaryAccentBrush}"/>
+                                            </Trigger>
+                                        </ControlTemplate.Triggers>
+                                    </ControlTemplate>
+                                </ToggleButton.Template>
+                            </ToggleButton>
+                            <ContentPresenter HorizontalAlignment="Left" VerticalAlignment="Center" 
+                                              Margin="{TemplateBinding Padding}"
+                                              IsHitTestVisible="False"
+                                              Content="{TemplateBinding SelectionBoxItem}"
+                                              ContentTemplate="{TemplateBinding SelectionBoxItemTemplate}"
+                                              ContentTemplateSelector="{TemplateBinding ItemTemplateSelector}"/>
+                            <Popup x:Name="PART_Popup" AllowsTransparency="true" Placement="Bottom"
+                                   IsOpen="{TemplateBinding IsDropDownOpen}"
+                                   PopupAnimation="{DynamicResource {x:Static SystemParameters.ComboBoxPopupAnimationKey}}">
+                                <Border x:Name="DropDownBorder" BorderBrush="{StaticResource BorderLightBrush}" 
+                                        BorderThickness="1" Background="{StaticResource PanelBackgroundBrush}" 
+                                        CornerRadius="6" Effect="{StaticResource DropShadowEffect}">
+
+                                    <ScrollViewer Margin="4,6,4,6" 
+                                                  Style="{StaticResource {x:Type ScrollViewer}}">
+                                        <StackPanel IsItemsHost="true" KeyboardNavigation.DirectionalNavigation="Contained" />
+                                    </ScrollViewer>
+
+                                </Border>
+                            </Popup>
+                        </Grid>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="IconButton" TargetType="Button">
+            <Setter Property="Width" Value="32"/>
+            <Setter Property="Height" Value="32"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Foreground" Value="{StaticResource TextBodyBrush}"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="border" Background="{TemplateBinding Background}" CornerRadius="6">
+                            <ContentPresenter x:Name="content" HorizontalAlignment="Center" VerticalAlignment="Center"
+                                              Opacity="0.7"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="border" Property="Background" Value="{StaticResource BorderLighterBrush}"/>
+                                <Setter TargetName="content" Property="Opacity" Value="1"/>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="border" Property="Background" Value="{StaticResource BorderLightBrush}"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Foreground" Value="{StaticResource PrimaryAccentBrush}"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+
+        <Style x:Key="ModernTextBox" TargetType="TextBox">
+            <Setter Property="Background" Value="{StaticResource PanelBackgroundBrush}"/>
+            <Setter Property="BorderBrush" Value="{StaticResource BorderLightBrush}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Foreground" Value="{StaticResource TextBodyBrush}"/>
+            <Setter Property="Padding" Value="8,5"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="TextBox">
+                        <Border x:Name="border" CornerRadius="6"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}">
+                            <ScrollViewer x:Name="PART_ContentHost" VerticalAlignment="{TemplateBinding VerticalContentAlignment}" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="border" Property="BorderBrush" Value="{StaticResource PrimaryAccentBrush}"/>
+                            </Trigger>
+                            <Trigger Property="IsKeyboardFocused" Value="True">
+                                <Setter TargetName="border" Property="BorderBrush" Value="{StaticResource PrimaryAccentBrush}"/>
+                                <Setter TargetName="border" Property="BorderThickness" Value="1.5"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="ModernRichTextBox" TargetType="RichTextBox">
+            <Setter Property="Background" Value="{StaticResource PanelBackgroundBrush}"/>
+            <Setter Property="BorderBrush" Value="{StaticResource BorderLightBrush}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Foreground" Value="{StaticResource TextBodyBrush}"/>
+            <Setter Property="Padding" Value="8,5"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="RichTextBox">
+                        <Border x:Name="border" CornerRadius="6"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}">
+                            <ScrollViewer x:Name="PART_ContentHost" Padding="{TemplateBinding Padding}" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="border" Property="BorderBrush" Value="{StaticResource PrimaryAccentBrush}"/>
+                            </Trigger>
+                            <Trigger Property="IsKeyboardFocused" Value="True">
+                                <Setter TargetName="border" Property="BorderBrush" Value="{StaticResource PrimaryAccentBrush}"/>
+                                <Setter TargetName="border" Property="BorderThickness" Value="1.5"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="StarToggleButtonStyle" TargetType="ToggleButton">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ToggleButton">
+                        <Border Background="Transparent">
+                            <ContentPresenter x:Name="content" HorizontalAlignment="Center" VerticalAlignment="Center" Opacity="0.5"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsChecked" Value="True">
+                                <Setter TargetName="content" Property="Opacity" Value="1"/>
+                            </Trigger>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="content" Property="Opacity" Value="0.8"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="ExpanderToggleButtonStyle" TargetType="ToggleButton">
+            <Setter Property="Focusable" Value="False"/>
+            <Setter Property="Width" Value="16"/>
+            <Setter Property="Height" Value="16"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ToggleButton">
+                        <Border Background="Transparent" Padding="4">
+                            <Path x:Name="Arrow"
+                                  Data="M 0,0 L 4,4 L 0,8 Z"
+                                  Stroke="{StaticResource TextBodyBrush}"
+                                  StrokeThickness="1.5"
+                                  Fill="Transparent"
+                                  VerticalAlignment="Center" HorizontalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsChecked" Value="True">
+                                <Setter TargetName="Arrow" Property="Data" Value="M 0,4 L 4,0 L 8,4 Z" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="ModernTreeViewItemStyle" TargetType="TreeViewItem">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Padding" Value="0"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="TreeViewItem">
+                        <StackPanel>
+                            <Border x:Name="Bd"
+                                    Background="{TemplateBinding Background}"
+                                    BorderThickness="{TemplateBinding BorderThickness}"
+                                    BorderBrush="{TemplateBinding BorderBrush}"
+                                    CornerRadius="4"
+                                    Padding="{TemplateBinding Padding}">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="20" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+
+                                    <ToggleButton x:Name="Expander"
+                                                  ClickMode="Press"
+                                                  IsChecked="{Binding IsExpanded, RelativeSource={RelativeSource TemplatedParent}}"
+                                                  Style="{StaticResource ExpanderToggleButtonStyle}" />
+
+                                    <ContentPresenter x:Name="PART_Header" Grid.Column="1"
+                                                      ContentSource="Header"
+                                                      HorizontalAlignment="Left"
+                                                      VerticalAlignment="Center" />
+                                </Grid>
+                            </Border>
+                            <ItemsPresenter x:Name="ItemsHost"
+                                            Visibility="Collapsed"
+                                            Margin="20,0,0,0" />
+                        </StackPanel>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsExpanded" Value="True">
+                                <Setter TargetName="ItemsHost" Property="Visibility" Value="Visible" />
+                            </Trigger>
+                            <Trigger Property="HasItems" Value="False">
+                                <Setter TargetName="Expander" Property="Visibility" Value="Hidden" />
+                            </Trigger>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="{StaticResource BorderLighterBrush}" />
+                            </Trigger>
+                            <Trigger Property="IsSelected" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="{StaticResource PrimaryAccentHoverBrush}" />
+                                <Setter Property="Foreground" Value="White" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="ModernTabItem" TargetType="TabItem">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Foreground" Value="{StaticResource TextBodyBrush}"/>
+            <Setter Property="Padding" Value="12,8"/>
+            <Setter Property="BorderThickness" Value="0,0,0,2"/>
+            <Setter Property="BorderBrush" Value="Transparent"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="TabItem">
+                        <Border x:Name="Border"
+                                Background="{TemplateBinding Background}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter x:Name="ContentSite"
+                                              ContentSource="Header"
+                                              HorizontalAlignment="Center"
+                                              VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsSelected" Value="True">
+                                <Setter Property="Foreground" Value="{StaticResource PrimaryAccentBrush}"/>
+                                <Setter TargetName="Border" Property="BorderBrush" Value="{StaticResource PrimaryAccentBrush}"/>
+                            </Trigger>
+
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Border" Property="Background" Value="{StaticResource BorderLighterBrush}"/>
+                            </Trigger>
+
+                            <MultiTrigger>
+                                <MultiTrigger.Conditions>
+                                    <Condition Property="IsSelected" Value="False" />
+                                    <Condition Property="IsMouseOver" Value="True" />
+                                </MultiTrigger.Conditions>
+                                <Setter Property="Foreground" Value="{StaticResource TextHeaderBrush}"/>
+                            </MultiTrigger>
+
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="ModernTabControl" TargetType="TabControl">
+            <Setter Property="Background" Value="{StaticResource WindowBackgroundBrush}"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="ItemContainerStyle" Value="{StaticResource ModernTabItem}"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="TabControl">
+                        <Grid KeyboardNavigation.TabNavigation="Local">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="*"/>
+                            </Grid.RowDefinitions>
+
+                            <TabPanel x:Name="HeaderPanel"
+                                      Grid.Row="0"
+                                      IsItemsHost="True"
+                                      Margin="0,0,0,-1"
+                                      Panel.ZIndex="1"
+                                      Background="Transparent" />
+
+                            <Border Grid.Row="1"
+                                    Background="{StaticResource PanelBackgroundBrush}"
+                                    BorderThickness="0"
+                                    CornerRadius="0">
+
+                                <ContentPresenter x:Name="PART_SelectedContentHost"
+                                                  ContentSource="SelectedContent"
+                                                  Margin="0" />
+                            </Border>
+                        </Grid>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <DataTemplate x:Key="FileLinkTemplate" DataType="{x:Type local:ChatMessage}">
+            <Border CornerRadius="10" Padding="10" Margin="3"
+                    Background="{Binding IsIncoming, Converter={StaticResource IncomingMessageBrushConverter}}">
+                <StackPanel>
+                    <TextBlock x:Name="AuthorText" Text="{Binding Author}" FontWeight="Bold" />
+                    <TextBlock x:Name="LinkText">
                         <Hyperlink NavigateUri="{Binding FileUrl}" RequestNavigate="Hyperlink_RequestNavigate">
                             <Run Text="{Binding FileName}" />
                         </Hyperlink>
-
-
                     </TextBlock>
-
-                    <!-- Время и статус прочтения -->
-                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
-                        <TextBlock Text="{Binding EditedText}" Foreground="Gray" FontSize="10" Margin="5,0,0,0"/>
-                        <TextBlock Text="{Binding Time, StringFormat=HH:mm}" FontSize="10" Foreground="Gray"/>
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,5,0,0">
+                        <TextBlock x:Name="EditedText" Text="{Binding EditedText}" FontSize="10" Margin="5,0,0,0"/>
+                        <TextBlock x:Name="TimeText" Text="{Binding Time, StringFormat=HH:mm}" FontSize="10"/>
                         <TextBlock Text=" " />
-                        <TextBlock Text="{Binding Status}" FontSize="10" Foreground="Gray"/>
+                        <TextBlock x:Name="StatusText" Text="{Binding Status}" FontSize="10"/>
                     </StackPanel>
                 </StackPanel>
             </Border>
+            <DataTemplate.Triggers>
+                <DataTrigger Binding="{Binding IsIncoming}" Value="True">
+                    <Setter TargetName="AuthorText" Property="Foreground" Value="{StaticResource PrimaryAccentBrush}"/>
+                    <Setter TargetName="LinkText" Property="Foreground" Value="{StaticResource TextBodyBrush}"/>
+                    <Setter TargetName="EditedText" Property="Foreground" Value="Gray"/>
+                    <Setter TargetName="TimeText" Property="Foreground" Value="Gray"/>
+                    <Setter TargetName="StatusText" Property="Foreground" Value="Gray"/>
+                </DataTrigger>
+                <DataTrigger Binding="{Binding IsIncoming}" Value="False">
+                    <Setter TargetName="AuthorText" Property="Foreground" Value="White"/>
+                    <Setter TargetName="LinkText" Property="Foreground" Value="White"/>
+                    <Setter TargetName="EditedText" Property="Foreground" Value="#E0E0E0"/>
+                    <Setter TargetName="TimeText" Property="Foreground" Value="#E0E0E0"/>
+                    <Setter TargetName="StatusText" Property="Foreground" Value="#E0E0E0"/>
+                </DataTrigger>
+            </DataTemplate.Triggers>
         </DataTemplate>
 
-
-
-        <!-- Обычные сообщения -->
         <DataTemplate x:Key="MarkdownTemplate" DataType="{x:Type local:ChatMessage}">
-            <Border x:Name="MessageBorder" CornerRadius="10" Padding="5" Margin="3"
-            Background="{Binding IsIncoming, Converter={StaticResource IncomingMessageBrushConverter}}">
+            <Border x:Name="MessageBorder" CornerRadius="10" Padding="12" Margin="3"
+                    Background="{Binding IsIncoming, Converter={StaticResource IncomingMessageBrushConverter}}">
                 <Grid>
-                    <!-- Основное содержимое сообщения -->
                     <StackPanel>
-                        <!-- Автор -->
-                        <TextBlock Text="{Binding Author}" FontWeight="Bold"/>
-                        <!-- Пересланное сообщение -->
-                        <Border BorderThickness="1" BorderBrush="#DDD" CornerRadius="5" Margin="0,0,0,5" Padding="4"
-                                Background="#F5F5F5"
+                        <TextBlock x:Name="AuthorText" Text="{Binding Author}" FontWeight="Bold" Margin="0,0,0,3"/>
+
+                        <Border x:Name="ForwardedBorder"
+                                CornerRadius="5"
+                                Padding="8" 
+                                Margin="0,0,0,7"
+                                Background="#EBEBEB" 
                                 Visibility="{Binding IsForwarded, Converter={StaticResource BoolToVisibilityConverter}}">
+                            <Border.BorderThickness>
+                                <Thickness Left="3"/>
+                            </Border.BorderThickness>
+                            <Border.BorderBrush>
+                                <StaticResource ResourceKey="PrimaryAccentBrush"/>
+                            </Border.BorderBrush>
+
                             <StackPanel>
-                                <TextBlock Text="{Binding ForwardedFrom}" FontWeight="Bold" FontSize="12"/>
-                                <TextBlock Text="Пересланное сообщение:" FontStyle="Italic" Foreground="Gray" FontSize="11"/>
-                                <TextBlock Text="{Binding ForwardedText}" TextWrapping="Wrap" FontSize="12"/>
+                                <TextBlock Text="{Binding ForwardedFrom, StringFormat='Ответ на: {0}'}" 
+                                           FontStyle="Italic" 
+                                           Foreground="{StaticResource PrimaryAccentBrush}" 
+                                           FontSize="11" Margin="0,0,0,3"/>
+                                <TextBlock Text="{Binding ForwardedText}" TextWrapping="Wrap" 
+                                           FontSize="12" 
+                                           Foreground="{StaticResource TextHeaderBrush}"/>
                             </StackPanel>
                         </Border>
+                        <md:MarkdownScrollViewer x:Name="MarkdownText" Markdown="{Binding DisplayText}"
+                                                 Style="{StaticResource MarkdownStyle}"
+                                                 VerticalScrollBarVisibility="Hidden"
+                                                 Margin="0,0,0,5"/>
 
-                        <!-- Markdown текст -->
-                        <md:MarkdownScrollViewer Markdown="{Binding DisplayText}" 
-                                         Style="{StaticResource MarkdownStyle}" 
-                                         VerticalScrollBarVisibility="Hidden"/>
-
-                        <Separator Margin="0,2,0,2"/>
-
-                        <!-- Время и статус -->
                         <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
-                            <TextBlock Text="{Binding IsEdited, Converter={StaticResource EditedTextConverter}}" 
-                               FontSize="10" Foreground="Gray" Margin="0,0,5,0"/>
-                            <TextBlock Text="{Binding Time, StringFormat=HH:mm}" FontSize="10" Foreground="Gray"/>
+                            <TextBlock x:Name="EditedText" Text="{Binding IsEdited, Converter={StaticResource EditedTextConverter}}"
+                                       FontSize="10" Margin="0,0,5,0"/>
+                            <TextBlock x:Name="TimeText" Text="{Binding Time, StringFormat=HH:mm}" FontSize="10"/>
                             <TextBlock Text=" " />
-                            <TextBlock Text="{Binding Status}" FontSize="10" Foreground="Gray"/>
+                            <TextBlock x:Name="StatusText" Text="{Binding Status}" FontSize="10"/>
                         </StackPanel>
                     </StackPanel>
 
-                    
-                    <!-- Кнопка эмодзи (слева сверху, скрыта по умолчанию) -->
-                    <Button x:Name="EmojiButton"
-                    Content="😊"
-                    Width="25"
-                    Height="25"
-                    HorizontalAlignment="Right"
-                    VerticalAlignment="Top"
-                    Margin="5"
-                    Visibility="Collapsed"
-                    Click="EmojiButton_Click"/>
+                    <Button x:Name="EmojiButton" Content="😊" Width="25" Height="25"
+                            HorizontalAlignment="Right" VerticalAlignment="Top"
+                            Margin="5" Visibility="Collapsed" Click="EmojiButton_Click"
+                            Style="{StaticResource IconButton}"/>
 
-                    <!-- Эмодзи реакции снизу справа -->
                     <ItemsControl ItemsSource="{Binding Reactions}" HorizontalAlignment="Left" VerticalAlignment="Bottom">
                         <ItemsControl.ItemsPanel>
                             <ItemsPanelTemplate>
@@ -130,12 +513,11 @@
                         <ItemsControl.ItemTemplate>
                             <DataTemplate>
                                 <Image Source="{Binding}" Width="15" Height="15" Margin="0.5"
-                   MouseLeftButtonDown="ReactionImage_MouseLeftButtonDown"/>
+                                       MouseLeftButtonDown="ReactionImage_MouseLeftButtonDown"/>
                             </DataTemplate>
                         </ItemsControl.ItemTemplate>
                     </ItemsControl>
                 </Grid>
-                <!-- Контекстное меню с редактированием, пересылкой, ответом -->
                 <Border.ContextMenu>
                     <ContextMenu>
                         <MenuItem Header="Редактировать" Click="EditMessage_Click" Visibility="{Binding Author, Converter={StaticResource AuthorToVisibilityConverter}}"/>
@@ -147,19 +529,16 @@
                     <EventTrigger RoutedEvent="MouseEnter">
                         <BeginStoryboard>
                             <Storyboard>
-                                <ObjectAnimationUsingKeyFrames Storyboard.TargetName="EmojiButton"
-                                                       Storyboard.TargetProperty="Visibility">
+                                <ObjectAnimationUsingKeyFrames Storyboard.TargetName="EmojiButton" Storyboard.TargetProperty="Visibility">
                                     <DiscreteObjectKeyFrame KeyTime="0:0:0" Value="{x:Static Visibility.Visible}"/>
                                 </ObjectAnimationUsingKeyFrames>
                             </Storyboard>
                         </BeginStoryboard>
                     </EventTrigger>
-
                     <EventTrigger RoutedEvent="MouseLeave">
                         <BeginStoryboard>
                             <Storyboard>
-                                <ObjectAnimationUsingKeyFrames Storyboard.TargetName="EmojiButton"
-                                                       Storyboard.TargetProperty="Visibility">
+                                <ObjectAnimationUsingKeyFrames Storyboard.TargetName="EmojiButton" Storyboard.TargetProperty="Visibility">
                                     <DiscreteObjectKeyFrame KeyTime="0:0:0" Value="{x:Static Visibility.Hidden}"/>
                                 </ObjectAnimationUsingKeyFrames>
                             </Storyboard>
@@ -167,21 +546,31 @@
                     </EventTrigger>
                 </Border.Triggers>
             </Border>
-            
+
+            <DataTemplate.Triggers>
+                <DataTrigger Binding="{Binding IsIncoming}" Value="True">
+                    <Setter TargetName="AuthorText" Property="Foreground" Value="{StaticResource PrimaryAccentBrush}"/>
+                    <Setter TargetName="MarkdownText" Property="Foreground" Value="White"/>
+                    <Setter TargetName="ForwardedBorder" Property="Background" Value="#357ABD"/>
+                    <Setter TargetName="EditedText" Property="Foreground" Value="#E0E0E0"/>
+                    <Setter TargetName="TimeText" Property="Foreground" Value="#E0E0E0"/>
+                    <Setter TargetName="StatusText" Property="Foreground" Value="#E0E0E0"/>
+                </DataTrigger>
+                <DataTrigger Binding="{Binding IsIncoming}" Value="False">
+                    <Setter TargetName="AuthorText" Property="Foreground" Value="White"/>
+                    <Setter TargetName="MarkdownText" Property="Foreground" Value="White"/>
+                    <Setter TargetName="ForwardedBorder" Property="Background" Value="#357ABD"/>
+                    <Setter TargetName="EditedText" Property="Foreground" Value="#E0E0E0"/>
+                    <Setter TargetName="TimeText" Property="Foreground" Value="#E0E0E0"/>
+                    <Setter TargetName="StatusText" Property="Foreground" Value="#E0E0E0"/>
+                </DataTrigger>
+            </DataTemplate.Triggers>
         </DataTemplate>
 
-
-
-
-
-
-
-        <!-- Подключаем селектор -->
         <local:MessageTemplateSelector x:Key="MessageTemplateSelector"
-                                   MarkdownTemplate="{StaticResource MarkdownTemplate}"
-                                   FileLinkTemplate="{StaticResource FileLinkTemplate}" />
+                                       MarkdownTemplate="{StaticResource MarkdownTemplate}"
+                                       FileLinkTemplate="{StaticResource FileLinkTemplate}" />
 
-        <!-- Стиль для контекстного меню -->
         <Style x:Key="NoHoverMenuStyle" TargetType="ContextMenu">
             <Setter Property="OverridesDefaultStyle" Value="True"/>
             <Setter Property="Background" Value="White"/>
@@ -189,195 +578,238 @@
         </Style>
     </Window.Resources>
 
-
-
-
-    <Grid>
+    <Grid Margin="10">
         <Grid.ColumnDefinitions>
             <ColumnDefinition Width="220"/>
+            <ColumnDefinition Width="10"/>
             <ColumnDefinition Width="*"/>
         </Grid.ColumnDefinitions>
 
-        <!-- Левая колонка: статус и контакты -->
-        <DockPanel Grid.Column="0" Margin="5">
-            <StackPanel DockPanel.Dock="Top" Margin="0,0,0,10" Height="92">
-                <ComboBox x:Name="StatusComboBox" SelectionChanged="StatusComboBox_SelectionChanged" SelectedIndex="0">
-                    <ComboBoxItem Content="Онлайн" Tag="Online"/>
-                    <ComboBoxItem Content="Отошел" Tag="Away"/>
-                </ComboBox>
+        <Border Grid.Column="0" Style="{StaticResource PanelCardStyle}" Padding="15">
+            <DockPanel Background="Transparent">
+                <StackPanel DockPanel.Dock="Top" Margin="0,0,0,10">
+                    <ComboBox x:Name="StatusComboBox" SelectionChanged="StatusComboBox_SelectionChanged" SelectedIndex="0"
+                              Style="{StaticResource ModernComboBox}">
+                        <ComboBoxItem Content="Онлайн" Tag="Online"/>
+                        <ComboBoxItem Content="Отошел" Tag="Away"/>
+                    </ComboBox>
 
-                <TextBox x:Name="StatusMessageBox"
-                         Margin="0,5,0,0"
-                         Text="Online via WPF"
-                         LostFocus="StatusMessageBox_LostFocus"/>
+                    <TextBox x:Name="StatusMessageBox"
+                             Margin="0,10,0,0"
+                             Text="Online via WPF"
+                             LostFocus="StatusMessageBox_LostFocus"
+                             Style="{StaticResource ModernTextBox}"/>
 
-                <Label x:Name="label" Content="Поиск" Width="46" VerticalContentAlignment="Stretch" HorizontalAlignment="Left"/>
-                <TextBox x:Name="SearchTextBox" TextChanged="SearchTextBox_TextChanged" 
-                         Width="210" 
-                         Height="19" HorizontalAlignment="Left" />
-            </StackPanel>
+                    <Label Content="Поиск" Margin="0,10,0,5" Foreground="{StaticResource TextBodyBrush}"/>
+                    <TextBox x:Name="SearchTextBox" TextChanged="SearchTextBox_TextChanged"
+                             Style="{StaticResource ModernTextBox}"/>
+                </StackPanel>
 
-            <TreeView x:Name="ContactsTree" ItemsSource="{Binding ContactGroups}" MouseDoubleClick="ContactsTree_MouseDoubleClick">
-                <TreeView.ItemTemplate>
-                    <HierarchicalDataTemplate ItemsSource="{Binding Contacts}" >
-                        <TextBlock Text="{Binding Name}" FontWeight="Bold"/>
-                        <HierarchicalDataTemplate.ItemTemplate>
+                <TreeView x:Name="ContactsTree" ItemsSource="{Binding ContactGroups}" MouseDoubleClick="ContactsTree_MouseDoubleClick"
+                          Background="Transparent" BorderThickness="0" Margin="0,10,0,0"
+                          ItemContainerStyle="{StaticResource ModernTreeViewItemStyle}">
+
+                    <TreeView.ItemTemplate>
+                        <HierarchicalDataTemplate ItemsSource="{Binding Contacts}" >
+                            <TextBlock Text="{Binding Name}" FontWeight="Bold" Margin="0,2" Foreground="{StaticResource TextHeaderBrush}"/>
+
+                            <HierarchicalDataTemplate.ItemTemplate>
+                                <DataTemplate>
+                                    <Grid Margin="0,2" Visibility="{Binding IsVisible, Converter={StaticResource BoolToVisibilityConverter}}">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto"/>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+
+                                        <Ellipse Grid.Column="0" Width="10" Height="10" Margin="0,0,5,0" 
+                                                 Fill="{Binding StatusBrush, Mode=OneWay}"
+                                                 VerticalAlignment="Center"/>
+
+                                        <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                            <TextBlock Text="{Binding Name}" />
+                                            <TextBlock Text="{Binding StatusText}" Foreground="Gray" FontSize="10"/>
+                                        </StackPanel>
+
+                                        <ToggleButton Grid.Column="2" IsChecked="{Binding IsFavorite}" 
+                                                      Width="16" Height="16" Margin="5,0" ToolTip="Добавить в избранное"
+                                                      Style="{StaticResource StarToggleButtonStyle}">
+                                            <Image Source="star.png"/>
+                                        </ToggleButton>
+
+                                        <Border Grid.Column="3" Background="Red" CornerRadius="7" Width="14" Height="14" Margin="5,0,0,0" 
+                                                Visibility="{Binding UnreadIndicatorVisibility}"
+                                                VerticalAlignment="Center">
+                                            <TextBlock Text="{Binding UnreadCount}" Foreground="White" FontSize="10" 
+                                                       HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                        </Border>
+                                    </Grid>
+                                </DataTemplate>
+                            </HierarchicalDataTemplate.ItemTemplate>
+                        </HierarchicalDataTemplate>
+                    </TreeView.ItemTemplate>
+                </TreeView>
+            </DockPanel>
+        </Border>
+
+        <Border Grid.Column="2" Style="{StaticResource PanelCardStyle}"
+                AllowDrop="True"
+                DragEnter="Window_DragEnter"
+                DragOver="Window_DragOver"
+                DragLeave="Window_DragLeave"
+                Drop="Window_Drop">
+
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="*"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+
+                <Grid Grid.Row="0" Margin="15,0,15,0">
+                    <TabControl x:Name="ChatTabs" SelectionChanged="ChatTab_SelectionChanged"
+                                Style="{StaticResource ModernTabControl}">
+
+                        <TabControl.ItemTemplate>
                             <DataTemplate>
-                                <StackPanel Orientation="Horizontal" Visibility="{Binding IsVisible, Converter={StaticResource BoolToVisibilityConverter}}">
-                                    <Ellipse Width="10" Height="10" Margin="0,0,5,0" Fill="{Binding StatusBrush, Mode=OneWay}"/>
-                                    <TextBlock Text="{Binding Name}" />
-                                    <TextBlock Text=" (" Margin="5,0,0,0"/>
-                                    <TextBlock Text="{Binding StatusText}" Foreground="Gray"/>
-                                    <TextBlock Text=")" />
-                                    <ToggleButton IsChecked="{Binding IsFavorite}" Width="16" Height="16" Margin="5,0,0,0" ToolTip="Добавить в избранное">
-                                        <Image Source="star.png"/>
-                                    </ToggleButton>
-                                    <Border Background="Red" CornerRadius="7" Width="14" Height="14" Margin="5,0,0,0" Visibility="{Binding UnreadIndicatorVisibility}">
-                                        <TextBlock Text="{Binding UnreadCount}" Foreground="White" FontSize="10" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                    <StackPanel.ContextMenu>
+                                        <ContextMenu>
+                                            <MenuItem Header="История" Click="OpenHistory_Click"/>
+                                            <MenuItem Header="Вложения" Click="OpenAttachments_Click"/>
+                                        </ContextMenu>
+                                    </StackPanel.ContextMenu>
+
+                                    <TextBlock Text="{Binding Header}" Margin="0,0,5,0" VerticalAlignment="Center"/>
+
+                                    <Border Background="Red" CornerRadius="7" Width="14" Height="14" Margin="2,0,5,0"
+                                        Visibility="{Binding UnreadIndicatorVisibility}" VerticalAlignment="Center">
+                                        <TextBlock Text="{Binding UnreadCount}" Foreground="White" FontSize="10" 
+                                           HorizontalAlignment="Center" VerticalAlignment="Center"/>
                                     </Border>
+
+                                    <Button Content="✕"
+                                        Style="{StaticResource IconButton}"
+                                        Width="18" Height="18" Margin="0"
+                                        Foreground="{StaticResource TextBodyBrush}"
+                                        Command="{Binding DataContext.CloseTabCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                        CommandParameter="{Binding}"
+                                        ToolTip="Закрыть диалог">
+                                        <Button.Resources>
+                                            <Style TargetType="TextBlock">
+                                                <Setter Property="FontSize" Value="10"/>
+                                            </Style>
+                                        </Button.Resources>
+                                    </Button>
                                 </StackPanel>
                             </DataTemplate>
-                        </HierarchicalDataTemplate.ItemTemplate>
-                    </HierarchicalDataTemplate>
-                </TreeView.ItemTemplate>
-            </TreeView>
+                        </TabControl.ItemTemplate>
 
+                        <TabControl.ContentTemplate>
+                            <DataTemplate>
+                                <DockPanel Background="Transparent">
+                                    <Label DockPanel.Dock="Bottom" Content="{Binding TypingText}" Foreground="Gray" />
+                                    <ScrollViewer VerticalScrollBarVisibility="Auto">
+                                        <ListBox x:Name="MessagesList"
+                                                 Margin="5"
+                                                 BorderThickness="0"
+                                                 Background="Transparent"
+                                                 ItemsSource="{Binding Content}"
+                                                 HorizontalContentAlignment="Stretch">
 
-        </DockPanel>
+                                            <i:Interaction.Behaviors>
+                                                <local:AutoScrollBehavior />
+                                            </i:Interaction.Behaviors>
+                                            <ListBox.ItemTemplateSelector>
+                                                <StaticResource ResourceKey="MessageTemplateSelector"/>
+                                            </ListBox.ItemTemplateSelector>
+                                        </ListBox>
+                                    </ScrollViewer>
+                                </DockPanel>
+                            </DataTemplate>
+                        </TabControl.ContentTemplate>
 
-        <!-- Правая колонка: чаты -->
-        <Grid Grid.Column="1" Margin="5">
-            <Grid.RowDefinitions>
-                <RowDefinition Height="*"/>
-                <RowDefinition Height="Auto"/>
-            </Grid.RowDefinitions>
+                    </TabControl>
+                </Grid>
 
-            <TabControl x:Name="ChatTabs" Grid.Row="0" SelectionChanged="ChatTab_SelectionChanged">
-                <TabControl.ItemTemplate>
-                    <DataTemplate>
-                        <StackPanel Orientation="Horizontal">
-                            <StackPanel.ContextMenu>
-                                <ContextMenu>
-                                    <MenuItem Header="История" Click="OpenHistory_Click"/>
-                                    <MenuItem Header="Вложения" Click="OpenAttachments_Click"/>
-                                </ContextMenu>
-                            </StackPanel.ContextMenu>
+                <StackPanel Grid.Row="1" Orientation="Vertical" Margin="15">
 
-                            <TextBlock Text="{Binding Header}" Margin="0,0,5,0"/>
+                    <Border x:Name="FilePreviewPanel"
+                            BorderBrush="{StaticResource BorderLighterBrush}"
+                            BorderThickness="1" CornerRadius="6" Padding="6" Margin="0,0,0,5"
+                            Background="#F9F9F9" Visibility="Collapsed">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel>
+                                <TextBlock x:Name="SelectedFileText" Visibility="Collapsed" />
+                                <TextBlock x:Name="SelectedFileName" Text="file.txt" FontWeight="Bold" />
+                                <TextBlock x:Name="SelectedFileSize" Text="12.4 MB" FontSize="11" Foreground="Gray" Margin="0,2,0,0"/>
+                                <ProgressBar x:Name="FileUploadProgressBar"
+                                             Minimum="0" Maximum="100" Margin="0,5,0,0"
+                                             Style="{StaticResource ModernProgressBar}"
+                                             Visibility="Collapsed"/>
+                            </StackPanel>
+                            <Button x:Name="CancelAttachmentButton" Grid.Column="1"
+                                    Content="❌" Background="Transparent" BorderThickness="0"
+                                    Foreground="Gray" FontSize="14" ToolTip="Отменить вложение"
+                                    Click="CancelAttachmentButton_Click"/>
+                        </Grid>
+                    </Border>
 
-                            <!-- Индикатор новых сообщений -->
-                            <Border Background="Red" CornerRadius="7" Width="14" Height="14" Margin="2,0,0,0"
-                                     Visibility="{Binding UnreadIndicatorVisibility}">
-                                <TextBlock Text="{Binding UnreadCount}" Foreground="White" FontSize="10" 
-                                     HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                            </Border>
-
-                            <Button Content="x"
-                                 Command="{Binding DataContext.CloseTabCommand, RelativeSource={RelativeSource AncestorType=Window}}"
-                                 CommandParameter="{Binding}"/>
-                        </StackPanel>
-
-                    </DataTemplate>
-                </TabControl.ItemTemplate>
-
-                <TabControl.ContentTemplate>
-                    <DataTemplate>
-                        <DockPanel>
-                            <Label DockPanel.Dock="Bottom" Content="{Binding TypingText}" Foreground="Gray" />
-                            <ScrollViewer VerticalScrollBarVisibility="Auto">
-                                <ListBox x:Name="MessagesList"
-                                             Margin="5"
-                                             BorderThickness="0"
-                                             Background="White"
-                                             ItemsSource="{Binding Content}">
-
-                                    <i:Interaction.Behaviors>
-                                        <local:AutoScrollBehavior />
-                                    </i:Interaction.Behaviors>
-
-                                    <ListBox.ItemTemplateSelector>
-                                        <StaticResource ResourceKey="MessageTemplateSelector"/>
-                                    </ListBox.ItemTemplateSelector>
-
-
-                                </ListBox>
-                            </ScrollViewer>
-                        </DockPanel>
-                    </DataTemplate>
-                </TabControl.ContentTemplate>
-            </TabControl>
-
-            <StackPanel Grid.Row="1" Orientation="Vertical" Margin="5">
-                <Border x:Name="FilePreviewPanel"
-                        BorderBrush="#DDD"
-                        BorderThickness="1"
-                        CornerRadius="6"
-                        Padding="6"
-                        Margin="0,0,0,5"
-                        Background="#F9F9F9"
-                        Visibility="Collapsed">
                     <Grid>
                         <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
                             <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
 
-                        <!-- Информация о файле -->
-                        <StackPanel>
-                            <TextBlock x:Name="SelectedFileText" Visibility="Collapsed" />
-                            <TextBlock x:Name="SelectedFileName" Text="file.txt" FontWeight="Bold" />
-                            <TextBlock x:Name="SelectedFileSize" Text="12.4 MB" FontSize="11" Foreground="Gray" Margin="0,2,0,0"/>
-                            <ProgressBar x:Name="FileUploadProgressBar"
-                                 Minimum="0" Maximum="100"
-                                 Style="{StaticResource ModernProgressBar}"
-                                 Visibility="Collapsed"/>
-                        </StackPanel>
+                        <Button x:Name="file_btn" Grid.Column="0" Margin="0,0,5,0"
+                                Style="{StaticResource IconButton}">
+                            <Image Source="paperclip.png" Width="18" Height="18" Opacity="0.7"/>
+                        </Button>
 
-                        <!-- Кнопка отмены -->
-                        <Button x:Name="CancelAttachmentButton"
-                                Grid.Column="1"
-                                Content="❌"
-                                Background="Transparent"
-                                BorderThickness="0"
-                                Foreground="Gray"
-                                FontSize="14"
-                                ToolTip="Отменить вложение"
-                                Click="CancelAttachmentButton_Click"/>
-                        
+                        <RichTextBox x:Name="MessageRichBox" Grid.Column="1"
+                                     AcceptsReturn="True"
+                                     VerticalScrollBarVisibility="Auto"
+                                     MinHeight="32" MaxHeight="100"
+                                     TextChanged="MessageRichBox_TextChanged"
+                                     KeyDown="MessageRichBox_KeyDown"
+                                     Style="{StaticResource ModernRichTextBox}"/>
+
+                        <Button x:Name="emoji_btn" Grid.Column="2" Margin="5,0,5,0"
+                                Style="{StaticResource IconButton}" Click="EmojiBtn_Click">
+                            <Image Source="emoji.png" Width="18" Height="18" Opacity="0.7"/>
+                        </Button>
+
+                        <Button x:Name="SendButton" Grid.Column="3"
+                                Style="{StaticResource IconButton}"
+                                ToolTip="Отправить"
+                                Click="SendMessage_Click">
+                            <Path Data="M0,0 L16,8 L0,16 L0,10 L12,8 L0,6 Z" 
+                                  Fill="{Binding Path=Foreground, RelativeSource={RelativeSource AncestorType=Button}}" 
+                                  Width="16" Height="16" Stretch="Uniform" 
+                                  VerticalAlignment="Center" HorizontalAlignment="Center"/>
+                        </Button>
                     </Grid>
+                </StackPanel>
+
+                <Border x:Name="DropOverlay"
+                        Grid.RowSpan="2"
+                        Background="#AA000000"
+                        Visibility="Collapsed"
+                        CornerRadius="8"
+                        MouseDown="DropOverlay_MouseDown">
+
+                    <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" TextBlock.FontSize="20">
+                        <TextBlock Text="📎 Чтобы прикрепить файл" Foreground="White" HorizontalAlignment="Center"/>
+                        <TextBlock Text="перетащите его в эту область" Foreground="White" HorizontalAlignment="Center"/>
+                    </StackPanel>
                 </Border>
-
-                <StackPanel Orientation="Horizontal">
-                    <Button x:Name="file_btn" Width="25" Height="25" Margin="5" BorderThickness="0">
-                        <Image Source="paperclip.png" Width="25" Height="25"/>
-                    </Button>
-                    <Button x:Name="emoji_btn" Width="25" Height="25" Margin="5" BorderThickness="0" Click="EmojiBtn_Click">
-                        <Image Source="emoji.png" Width="25" Height="25"/>
-                    </Button>
-                    <RichTextBox x:Name="MessageRichBox"
-                                 AcceptsReturn="True"
-                                 VerticalScrollBarVisibility="Auto"
-                                 Width="482"
-                                 TextChanged="MessageRichBox_TextChanged"
-                                 KeyDown="MessageRichBox_KeyDown"/>
-                    <Button Content="Отправить" Click="SendMessage_Click" Width="100" Height="25" Margin="0,0,0,-2"/>
-                </StackPanel>
-            </StackPanel>
-            <!-- Затенение при Drag&Drop -->
-            <Border x:Name="DropOverlay"
-             Grid.ColumnSpan="2"
-             Background="#AA000000"  
-             Visibility="Collapsed"
-             CornerRadius="0"
-             HorizontalAlignment="Stretch"
-             VerticalAlignment="Stretch"
-             MouseDown="DropOverlay_MouseDown">
-
-                <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" TextBlock.FontSize="20">
-                    <TextBlock Text="📎 Чтобы прикрепить файл" Foreground="White" HorizontalAlignment="Center"/>
-                    <TextBlock Text="перетащите его в эту область" Foreground="White" HorizontalAlignment="Center"/>
-                </StackPanel>
-            </Border>
-        </Grid>
+            </Grid>
+        </Border>
     </Grid>
 </Window>

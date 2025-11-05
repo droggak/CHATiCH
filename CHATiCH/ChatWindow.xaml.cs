@@ -25,6 +25,7 @@ using System.Net;
 using Microsoft.Win32;
 using System.Collections.Generic;
 using System.Text;
+using System.Diagnostics;
 
 namespace CHATiCH
 {
@@ -1603,7 +1604,6 @@ namespace CHATiCH
                 }
             }
         }
-
     }
 
     public class ChatTab : INotifyPropertyChanged
@@ -1671,6 +1671,7 @@ namespace CHATiCH
             remove { CommandManager.RequerySuggested -= value; }
         }
     }
+
     public class RelativePathToUriConverter : IValueConverter
     {
         public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
