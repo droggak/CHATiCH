@@ -2,6 +2,108 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="Вложения" Height="500" Width="700" ResizeMode="CanResize">
+
+    <Window.Resources>
+        <!-- Шаблон стрелки для ComboBox -->
+        <ControlTemplate x:Key="ArrowButtonTemplate" TargetType="ToggleButton">
+            <Border Background="Transparent" Padding="0">
+                <Grid>
+                    <Path Data="M 0 0 L 8 0 L 4 5 Z"
+                          Width="10"
+                          Height="6"
+                          Fill="#444"
+                          VerticalAlignment="Center"
+                          Margin="0,4,0,0"/>
+                </Grid>
+            </Border>
+        </ControlTemplate>
+
+        <!-- Стиль ComboBox -->
+        <Style x:Key="ModernComboBox" TargetType="ComboBox">
+            <Setter Property="Padding" Value="6"/>
+            <Setter Property="Background" Value="White"/>
+            <Setter Property="BorderBrush" Value="#D0D7E2"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="HorizontalContentAlignment" Value="Left"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ComboBox">
+                        <Grid>
+                            <Border x:Name="MainBorder"
+                                    Background="{TemplateBinding Background}"
+                                    BorderBrush="{TemplateBinding BorderBrush}"
+                                    BorderThickness="{TemplateBinding BorderThickness}"
+                                    CornerRadius="6"/>
+                            <!-- Текст выбранного элемента -->
+                            <ContentPresenter Margin="6,0,32,0"
+                                              VerticalAlignment="Center"
+                                              Content="{TemplateBinding SelectionBoxItem}"/>
+                            <ToggleButton Grid.Column="1"
+                                          Focusable="False"
+                                          Template="{StaticResource ArrowButtonTemplate}"
+                                          IsChecked="{Binding IsDropDownOpen, Mode=TwoWay,
+                                              RelativeSource={RelativeSource TemplatedParent}}"
+                                          HorizontalAlignment="Right"
+                                          Width="28" />
+                            <Popup Name="PART_Popup"
+                                   Placement="Bottom"
+                                   IsOpen="{TemplateBinding IsDropDownOpen}"
+                                   AllowsTransparency="True"
+                                   Focusable="False">
+                                <Border Background="White"
+                                        BorderBrush="#D0D7E2"
+                                        BorderThickness="1"
+                                        CornerRadius="6">
+                                    <ScrollViewer MaxHeight="220">
+                                        <ItemsPresenter/>
+                                    </ScrollViewer>
+                                </Border>
+                            </Popup>
+                        </Grid>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="MainBorder" Property="BorderBrush" Value="#A8C5F8"/>
+                            </Trigger>
+                            <Trigger Property="IsKeyboardFocusWithin" Value="True">
+                                <Setter TargetName="MainBorder" Property="BorderBrush" Value="#6FA2FB"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="MainBorder" Property="Opacity" Value="0.5"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Стиль ComboBoxItem -->
+        <Style x:Key="ModernComboBoxItem" TargetType="ComboBoxItem">
+            <Setter Property="Padding" Value="8,6"/>
+            <Setter Property="FontFamily" Value="Segoe UI"/>
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="HorizontalContentAlignment" Value="Left"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ComboBoxItem">
+                        <Border x:Name="Bd" Background="{TemplateBinding Background}" CornerRadius="4" Padding="{TemplateBinding Padding}">
+                            <ContentPresenter VerticalAlignment="Center" HorizontalAlignment="Left"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="#EEF6FF"/>
+                            </Trigger>
+                            <Trigger Property="IsSelected" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="#D6EAFB"/>
+                                <Setter Property="Foreground" Value="#0B5FA5"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </Window.Resources>
+
     <Grid Margin="10">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
@@ -13,8 +115,14 @@
             <Label Content="Дата:" VerticalAlignment="Center"/>
             <DatePicker x:Name="DateFilter" Width="150" SelectedDateChanged="DateFilter_SelectedDateChanged"/>
             <Label Content="Тип:" Margin="10,0,0,0" VerticalAlignment="Center"/>
-            <ComboBox x:Name="TypeFilter" Width="150" SelectionChanged="TypeFilter_SelectionChanged">
-                <ComboBoxItem Content="Все" Tag="all" IsSelected="True"/>
+            <ComboBox x:Name="TypeFilter"
+                      Width="150"
+                      SelectionChanged="TypeFilter_SelectionChanged"
+                      Style="{StaticResource ModernComboBox}"
+                      ItemContainerStyle="{StaticResource ModernComboBoxItem}"
+                      SelectedIndex="0"
+                      IsEditable="False">
+                <ComboBoxItem Content="Все" Tag="all"/>
                 <ComboBoxItem Content="Фото" Tag="image"/>
                 <ComboBoxItem Content="Видео" Tag="video"/>
                 <ComboBoxItem Content="Музыка" Tag="audio"/>

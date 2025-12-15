@@ -16,7 +16,6 @@ using S22.Xmpp;
 using S22.Xmpp.Client;
 using S22.Xmpp.Im;
 using Newtonsoft.Json;
-using System.Text.Json;
 using System.Globalization;
 using System.Windows.Controls.Primitives;
 using System.Threading.Tasks;
@@ -25,7 +24,11 @@ using System.Net;
 using Microsoft.Win32;
 using System.Collections.Generic;
 using System.Text;
-using System.Diagnostics;
+using System.Net.Http;
+using System.Net.Http.Headers;
+using Newtonsoft.Json.Linq;
+
+
 
 namespace CHATiCH
 {
@@ -566,7 +569,7 @@ namespace CHATiCH
             {
                 var roster = _client.GetRoster();
                 var groupsDict = new Dictionary<string, ContactGroup>();
-
+                
                 // Папка для конфигурации пользователя
                 string folder = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "CHATiCH");
                 if (!Directory.Exists(folder))
@@ -589,7 +592,7 @@ namespace CHATiCH
                     // берем только группы, начинающиеся с "IM_"
                     var imGroup = item.Groups.FirstOrDefault(g => g.StartsWith("IM_"));
                     if (imGroup == null) continue;
-
+                    Console.WriteLine(imGroup);
                     string groupName = imGroup.Substring(3);
 
                     if (!groupsDict.ContainsKey(groupName))
@@ -641,7 +644,63 @@ namespace CHATiCH
             }
         }
 
+        private void GroupMessage_Click(object sender, RoutedEventArgs e)
+        {
+            var broadcastWindow = new SelectBroadcastWindow(ContactGroups, _client);
+            broadcastWindow.Owner = this;
+            broadcastWindow.ShowDialog();
+        }
 
+        private void ForwardMessage_Click(object sender, RoutedEventArgs e)
+        {
+            if (sender is MenuItem menuItem && menuItem.DataContext is ChatMessage message)
+            {
+                // Диалог выбора контакта
+                var selectWindow = new SelectContactWindow(ContactGroups);
+                if (selectWindow.ShowDialog() == true)
+                {
+                    var targetJid = selectWindow.SelectedJid;
+                    if (string.IsNullOrEmpty(targetJid))
+                        return;
+
+                    // Находим или создаём вкладку
+                    var targetTab = ChatTabsItems.FirstOrDefault(t => t.Jid == targetJid);
+                    if (targetTab == null)
+                    {
+                        var messages = HistoryManager.LoadHistory(targetJid);
+                        targetTab = new ChatTab { Jid = targetJid, Header = targetJid, Content = messages };
+                        ChatTabsItems.Add(targetTab);
+                    }
+
+                    var list = targetTab.Content as ObservableCollection<ChatMessage>;
+                    string newId = Guid.NewGuid().ToString("N");
+
+                    // Формируем пересланное сообщение
+                    var newMessage = new ChatMessage
+                    {
+                        Id = newId,
+                        Author = "Я",
+                        Time = DateTime.Now,
+                        IsIncoming = false,
+                        Status = MessageStatus.Sent,
+                        Text = message.Text,
+                        FileName = message.FileName,
+                        FileUrl = message.FileUrl,
+                        ForwardedFrom = message.Author,
+                        ForwardedText = message.Text
+                    };
+
+                    list.Add(newMessage);
+
+                    // Отправляем XMPP-пакет с пометкой о пересылке
+                    string payload = MetaPrefixId + newId + "##" + "##fwd:" + message.Author + "##" + message.Text;
+                    _client.SendMessage(new Jid(targetJid), payload);
+
+                    ScheduleSave(targetJid, list);
+                    MessageBox.Show($"Переслано от {message.Author}", "Готово", MessageBoxButton.OK, MessageBoxImage.Information);
+                }
+            }
+        }
         private void SaveFavorites()
         {
             try
@@ -1184,56 +1243,8 @@ namespace CHATiCH
                 }
             }
         }
-        private void ForwardMessage_Click(object sender, RoutedEventArgs e)
-        {
-            if (sender is MenuItem menuItem && menuItem.DataContext is ChatMessage message)
-            {
-                // Диалог выбора контакта
-                var selectWindow = new SelectContactWindow(ContactGroups);
-                if (selectWindow.ShowDialog() == true)
-                {
-                    var targetJid = selectWindow.SelectedJid;
-                    if (string.IsNullOrEmpty(targetJid))
-                        return;
+        
 
-                    // Находим или создаём вкладку
-                    var targetTab = ChatTabsItems.FirstOrDefault(t => t.Jid == targetJid);
-                    if (targetTab == null)
-                    {
-                        var messages = HistoryManager.LoadHistory(targetJid);
-                        targetTab = new ChatTab { Jid = targetJid, Header = targetJid, Content = messages };
-                        ChatTabsItems.Add(targetTab);
-                    }
-
-                    var list = targetTab.Content as ObservableCollection<ChatMessage>;
-                    string newId = Guid.NewGuid().ToString("N");
-
-                    // Формируем пересланное сообщение
-                    var newMessage = new ChatMessage
-                    {
-                        Id = newId,
-                        Author = "Я",
-                        Time = DateTime.Now,
-                        IsIncoming = false,
-                        Status = MessageStatus.Sent,
-                        Text = message.Text,
-                        FileName = message.FileName,
-                        FileUrl = message.FileUrl,
-                        ForwardedFrom = message.Author,
-                        ForwardedText = message.Text
-                    };
-
-                    list.Add(newMessage);
-
-                    // Отправляем XMPP-пакет с пометкой о пересылке
-                    string payload = MetaPrefixId + newId + "##" + "##fwd:" + message.Author + "##" + message.Text;
-                    _client.SendMessage(new Jid(targetJid), payload);
-
-                    ScheduleSave(targetJid, list);
-                    MessageBox.Show($"Переслано от {message.Author}", "Готово", MessageBoxButton.OK, MessageBoxImage.Information);
-                }
-            }
-        }
         private void MessagesList_DragEnter(object sender, DragEventArgs e)
         {
             if (e.Data.GetDataPresent(DataFormats.FileDrop))
@@ -1564,7 +1575,7 @@ namespace CHATiCH
             }
         }
 
-        private void ScheduleSave(string jid, ObservableCollection<ChatMessage> messages)
+        public void ScheduleSave(string jid, ObservableCollection<ChatMessage> messages)
         {
             if (messages == null || string.IsNullOrEmpty(jid)) return;
             _debounceJid = jid;
@@ -1603,7 +1614,7 @@ namespace CHATiCH
                         || contact.Jid.ToLower().Contains(search);
                 }
             }
-        }
+        }        
     }
 
     public class ChatTab : INotifyPropertyChanged

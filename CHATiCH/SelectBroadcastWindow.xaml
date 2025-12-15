@@ -1,0 +1,51 @@
+﻿<Window x:Class="CHATiCH.SelectBroadcastWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Групповая отправка"
+        Height="550" Width="400"
+        WindowStartupLocation="CenterOwner">
+
+    <Grid Margin="10">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- Ввод текста сообщения -->
+        <TextBox x:Name="MessageTextBox"
+                 Height="80"
+                 TextWrapping="Wrap"
+                 AcceptsReturn="True"
+                 VerticalScrollBarVisibility="Auto"
+                  />
+
+        <!-- Список групп/пользователей с чекбоксами -->
+        <ScrollViewer Grid.Row="1" Margin="0,10,0,10">
+            <ItemsControl ItemsSource="{Binding ContactGroups}">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                        <StackPanel Margin="0,5">
+                            <TextBlock Text="{Binding Name}"
+                                       FontWeight="Bold"/>
+                            <ItemsControl ItemsSource="{Binding Contacts}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <CheckBox Content="{Binding Name}"
+                                                  IsChecked="{Binding IsSelected}" />
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </StackPanel>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </ScrollViewer>
+
+        <!-- Кнопка отправки -->
+        <Button Grid.Row="2"
+                Content="Отправить"
+                Height="36"
+                Click="Send_Click"/>
+    </Grid>
+</Window>

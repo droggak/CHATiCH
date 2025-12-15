@@ -19,7 +19,7 @@
         <SolidColorBrush x:Key="BorderLightBrush" Color="#CCCCCC"/>
         <SolidColorBrush x:Key="BorderLighterBrush" Color="#E0E0E0"/>
         <SolidColorBrush x:Key="IncomingMessageBackgroundBrush" Color="#E4E6EB"/>
-        
+
 
         <DropShadowEffect x:Key="DropShadowEffect" Color="#888888" BlurRadius="10" ShadowDepth="3" Opacity="0.3"/>
 
@@ -145,8 +145,89 @@
                 </Setter.Value>
             </Setter>
         </Style>
+        <Style x:Key="ContextMenuMenuItemStyle" TargetType="{x:Type MenuItem}">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderBrush" Value="Transparent"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="{x:Type MenuItem}">
+                        <Border x:Name="Border"
+                                CornerRadius="4"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}">
+                            <ContentPresenter Margin="8,4"
+                                              ContentSource="Header"
+                                              RecognizesAccessKey="True"/>
+                        </Border>
 
-        <Style x:Key="IconButton" TargetType="Button">
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsHighlighted" Value="True">
+                                <Setter TargetName="Border" Property="Background" 
+                                        Value="{StaticResource BorderLighterBrush}"/>
+                                <Setter Property="Foreground" Value="{StaticResource TextHeaderBrush}"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Foreground" Value="Gray"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="CustomContextMenuStyle" TargetType="{x:Type ContextMenu}">
+            <Setter Property="OverridesDefaultStyle" Value="True"/>
+            <Setter Property="SnapsToDevicePixels" Value="True"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="{x:Type ContextMenu}">
+                        <Border Background="{StaticResource PanelBackgroundBrush}" 
+                                BorderBrush="{StaticResource BorderLightBrush}" 
+                                BorderThickness="1"
+                                CornerRadius="8"
+                                Padding="5"
+                                Effect="{StaticResource DropShadowEffect}">
+                            <StackPanel IsItemsHost="True" KeyboardNavigation.DirectionalNavigation="Cycle"/>
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        <Style x:Key="CustomMenuItemStyle" TargetType="{x:Type MenuItem}">
+            <Setter Property="OverridesDefaultStyle" Value="True"/>
+            <Setter Property="SnapsToDevicePixels" Value="True"/>
+            <Setter Property="Padding" Value="8,4"/>
+            <Setter Property="Foreground" Value="{StaticResource TextHeaderBrush}"/>
+
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="{x:Type MenuItem}">
+                        <Border x:Name="Border"
+                                CornerRadius="4"
+                                Background="Transparent"
+                                BorderThickness="0"
+                                Margin="2,0">
+                            <ContentPresenter Margin="{TemplateBinding Padding}"
+                                              ContentSource="Header"
+                                              RecognizesAccessKey="True"/>
+                        </Border>
+
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsHighlighted" Value="True">
+                                <Setter TargetName="Border" Property="Background" 
+                                        Value="{StaticResource BorderLighterBrush}"/>
+                                <Setter Property="Foreground" Value="{StaticResource TextHeaderBrush}"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Foreground" Value="Gray"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        <Style x:Key="IconButton" TargetType="Button" >
             <Setter Property="Width" Value="32"/>
             <Setter Property="Height" Value="32"/>
             <Setter Property="Background" Value="Transparent"/>
@@ -519,10 +600,16 @@
                     </ItemsControl>
                 </Grid>
                 <Border.ContextMenu>
-                    <ContextMenu>
-                        <MenuItem Header="Редактировать" Click="EditMessage_Click" Visibility="{Binding Author, Converter={StaticResource AuthorToVisibilityConverter}}"/>
-                        <MenuItem Header="Переслать" Click="ForwardMessage_Click"/>
-                        <MenuItem Header="Ответить" Click="ReplyMessage_Click"/>
+                    <ContextMenu Style="{StaticResource CustomContextMenuStyle}">
+
+                        <MenuItem Header="Редактировать" Click="EditMessage_Click" 
+                                  Style="{StaticResource CustomMenuItemStyle}"
+                                  Visibility="{Binding Author, Converter={StaticResource AuthorToVisibilityConverter}}"/>
+                        <MenuItem Header="Переслать" Click="ForwardMessage_Click" 
+                                  Style="{StaticResource CustomMenuItemStyle}"/>
+                        <MenuItem Header="Ответить" Click="ReplyMessage_Click" 
+                                  Style="{StaticResource CustomMenuItemStyle}"/>
+
                     </ContextMenu>
                 </Border.ContextMenu>
                 <Border.Triggers>
@@ -580,12 +667,12 @@
 
     <Grid Margin="10">
         <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="220"/>
-            <ColumnDefinition Width="10"/>
-            <ColumnDefinition Width="*"/>
+            <ColumnDefinition Width="250"/>
+            <ColumnDefinition Width="0"/>
+            <ColumnDefinition/>
         </Grid.ColumnDefinitions>
 
-        <Border Grid.Column="0" Style="{StaticResource PanelCardStyle}" Padding="15">
+        <Border Grid.Column="0" Style="{StaticResource PanelCardStyle}" Padding="15" Margin="0,0,10,0">
             <DockPanel Background="Transparent">
                 <StackPanel DockPanel.Dock="Top" Margin="0,0,0,10">
                     <ComboBox x:Name="StatusComboBox" SelectionChanged="StatusComboBox_SelectionChanged" SelectedIndex="0"
@@ -789,6 +876,11 @@
                                 Style="{StaticResource IconButton}"
                                 ToolTip="Отправить"
                                 Click="SendMessage_Click">
+                            <Button.ContextMenu>
+                                <ContextMenu>
+                                    <MenuItem Header="Объявление" Click="GroupMessage_Click"/>
+                                </ContextMenu>
+                            </Button.ContextMenu>
                             <Path Data="M0,0 L16,8 L0,16 L0,10 L12,8 L0,6 Z" 
                                   Fill="{Binding Path=Foreground, RelativeSource={RelativeSource AncestorType=Button}}" 
                                   Width="16" Height="16" Stretch="Uniform" 

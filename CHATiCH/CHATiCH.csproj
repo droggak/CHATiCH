@@ -204,6 +204,9 @@
     <Compile Include="LinkConverters.cs" />
     <Compile Include="MessageStatus.cs" />
     <Compile Include="MessageTemplateSelector.cs" />
+    <Compile Include="SelectBroadcastWindow.xaml.cs">
+      <DependentUpon>SelectBroadcastWindow.xaml</DependentUpon>
+    </Compile>
     <Compile Include="SelectContactWindow.xaml.cs">
       <DependentUpon>SelectContactWindow.xaml</DependentUpon>
     </Compile>
@@ -235,6 +238,10 @@
       <DependentUpon>LoginForm.xaml</DependentUpon>
       <SubType>Code</SubType>
     </Compile>
+    <Page Include="SelectBroadcastWindow.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
     <Page Include="SelectContactWindow.xaml">
       <SubType>Designer</SubType>
       <Generator>MSBuild:Compile</Generator>
