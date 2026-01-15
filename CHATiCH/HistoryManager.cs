@@ -4,6 +4,7 @@ using System.Globalization;
 using System.IO;
 using System.Linq;
 using Newtonsoft.Json;
+using Security;
 
 namespace CHATiCH
 {
@@ -28,7 +29,10 @@ namespace CHATiCH
             string fileName = Path.Combine(userFolder, DateTime.Now.ToString("yyyy-MM-dd") + ".json");
             try
             {
-                File.WriteAllText(fileName, JsonConvert.SerializeObject(messages, Formatting.Indented));
+                var json = JsonConvert.SerializeObject(messages, Formatting.Indented);
+                var encrypted = AesJsonCrypto.Encrypt(json);
+                File.WriteAllBytes(fileName, encrypted);
+
             }
             catch (Exception ex)
             {
@@ -44,13 +48,20 @@ namespace CHATiCH
             string userFolder = Path.Combine(HistoryRoot, jid);
             if (!Directory.Exists(userFolder)) return result;
 
-            string fileName = Path.Combine(userFolder, (date ?? DateTime.Now).ToString("yyyy-MM-dd") + ".json");
+            string fileName = Path.Combine(
+                userFolder,
+                (date ?? DateTime.Now).ToString("yyyy-MM-dd") + ".json");
+
             if (!File.Exists(fileName)) return result;
 
             try
             {
-                string json = File.ReadAllText(fileName);
-                var messages = JsonConvert.DeserializeObject<ObservableCollection<ChatMessage>>(json);
+                byte[] encrypted = File.ReadAllBytes(fileName);
+                string json = AesJsonCrypto.Decrypt(encrypted);
+
+                var messages =
+                    JsonConvert.DeserializeObject<ObservableCollection<ChatMessage>>(json);
+
                 if (messages != null)
                 {
                     foreach (var msg in messages)
@@ -64,6 +75,7 @@ namespace CHATiCH
 
             return result;
         }
+
 
         public static string[] GetAvailableDates(string jid)
         {

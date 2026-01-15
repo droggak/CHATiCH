@@ -28,8 +28,6 @@ using System.Net.Http;
 using System.Net.Http.Headers;
 using Newtonsoft.Json.Linq;
 
-
-
 namespace CHATiCH
 {
     public partial class ChatWindow : Window
@@ -121,7 +119,7 @@ namespace CHATiCH
 
             _trayIcon = new TaskbarIcon
             {
-                Icon = new System.Drawing.Icon("app.ico"), // Fix: полный путь для Icon
+                Icon = new System.Drawing.Icon("F:\\VKR\\CHATiCH\\CHATiCH\\bin\\Debug\\app.ico"), // Fix: полный путь для Icon
                 ToolTipText = "CHATiCH",
                 Visibility = Visibility.Visible
             };
@@ -989,9 +987,11 @@ namespace CHATiCH
                 // Уведомление в трее, если окно неактивно
                 if (!IsActive)
                 {
+                    
                     _trayIcon.ShowBalloonTip("Новое сообщение",
                         $"{bareJid}: {realText.Truncate(50)}",
                         BalloonIcon.Info);
+                    Console.WriteLine("Показано уведомление в трее.");
                 }
             });
         }
@@ -1026,6 +1026,7 @@ namespace CHATiCH
 
         private async void SendMessage_Click(object sender, RoutedEventArgs e)
         {
+
             if (_client == null || !_client.Connected)
                 return;
 

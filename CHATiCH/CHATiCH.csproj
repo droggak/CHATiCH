@@ -188,6 +188,7 @@
       <Generator>MSBuild:Compile</Generator>
       <SubType>Designer</SubType>
     </ApplicationDefinition>
+    <Compile Include="AesJsonCrypto.cs" />
     <Compile Include="AppConfig.cs" />
     <Compile Include="AttachmentsWindow.xaml.cs">
       <DependentUpon>AttachmentsWindow.xaml</DependentUpon>
@@ -275,9 +276,6 @@
     <None Include="App.config" />
   </ItemGroup>
   <ItemGroup>
-    <Resource Include="app.ico" />
-  </ItemGroup>
-  <ItemGroup>
     <Resource Include="paperclip.png" />
   </ItemGroup>
   <ItemGroup>
@@ -285,6 +283,9 @@
   </ItemGroup>
   <ItemGroup>
     <Resource Include="star.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="app.ico" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
 </Project>

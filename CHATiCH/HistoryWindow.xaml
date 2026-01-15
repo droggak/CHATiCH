@@ -259,7 +259,8 @@
                                     <md:MarkdownScrollViewer
                                         Markdown="{Binding Text}"
                                         FontSize="13"
-                                        Margin="0,6,0,6"/>
+                                        Margin="0,6,0,6"
+                                        VerticalScrollBarVisibility="Hidden"/>
 
                                     <TextBlock Text="{Binding Time, StringFormat='{}{0:dd.MM.yyyy HH:mm}'}"
                                                FontSize="11"
